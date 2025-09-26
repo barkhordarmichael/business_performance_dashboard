@@ -1,0 +1,1301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Business Performance Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!--<link rel="stylesheet" href="styles.css"> -->
+
+    <style>
+        /* Custom styles for the dashboard */
+
+/* Ensure gauges are properly centered */
+.relative {
+    position: relative;
+}
+
+/* Custom button animations */
+button {
+    transition: all 0.2s ease-in-out;
+}
+
+button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+button:active {
+    transform: translateY(0);
+}
+
+/* Input field focus styles */
+input[type="number"]:focus {
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* Card hover effects */
+.bg-white {
+    transition: all 0.2s ease-in-out;
+}
+
+.bg-white:hover {
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
+}
+
+/* Gauge container styles */
+canvas {
+    max-width: 100%;
+    height: auto;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .container {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+    
+    .grid {
+        gap: 1rem;
+    }
+}
+
+/* Number input spinner removal for cleaner look */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+input[type="number"] {
+    -moz-appearance: textfield;
+}
+
+/* Loading states */
+.loading {
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+/* Success/Error states */
+.success {
+    border-color: #10B981;
+    background-color: #F0FDF4;
+}
+
+.error {
+    border-color: #EF4444;
+    background-color: #FEF2F2;
+}
+
+/* Custom scrollbar for better aesthetics */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* Toast notification styles */
+.toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 16px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    animation: slideIn 0.3s ease-out;
+}
+
+.toast.success {
+    border-left: 4px solid #10B981;
+}
+
+.toast.error {
+    border-left: 4px solid #EF4444;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slideOut {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+}
+
+.toast.slide-out {
+    animation: slideOut 0.3s ease-in;
+}
+    </style>
+    <script>
+        // Dashboard Application Class
+class BusinessDashboard {
+    constructor() {
+        this.currentMonth = new Date().getMonth();
+        this.currentYear = new Date().getFullYear();
+        this.monthKey = `${this.currentYear}-${this.currentMonth}`;
+        
+        // Initialize data structure
+        this.data = this.loadMonthData();
+        
+        // Initialize UI elements
+        this.initializeElements();
+        this.bindEvents();
+        this.updateDisplay();
+        this.initializeGauges();
+        this.initializeCharts();
+        this.initializeHourlyChart();
+    }
+
+    // Initialize DOM elements
+    initializeElements() {
+        this.elements = {
+            currentMonth: document.getElementById('currentMonth'),
+            totalRevenue: document.getElementById('totalRevenue'),
+            revenueInput: document.getElementById('revenueInput'),
+            addRevenueBtn: document.getElementById('addRevenueBtn'),
+            conversionRate: document.getElementById('conversionRate'),
+            highestConversion: document.getElementById('highestConversion'),
+            lowestConversion: document.getElementById('lowestConversion'),
+            totalUnits: document.getElementById('totalUnits'),
+            highestUnits: document.getElementById('highestUnits'),
+            lowestUnits: document.getElementById('lowestUnits'),
+
+            negativeDisposition: document.getElementById('negativeDisposition'),
+            negativeBtn: document.getElementById('negativeBtn'),
+            resetDataBtn: document.getElementById('resetDataBtn'),
+            resetDailyBtn: document.getElementById('resetDailyDataBtn'),
+            exportDataBtn: document.getElementById('exportDataBtn'),
+            importFileInput: document.getElementById('importFileInput'),
+            unitGaugeValue: document.getElementById('unitGaugeValue'),
+            negativeGaugeValue: document.getElementById('negativeGaugeValue'),
+            conversionGaugeValue: document.getElementById('conversionGaugeValue'),
+            // Daily stats elements
+            todayRevenue: document.getElementById('todayRevenue'),
+            todayUnits: document.getElementById('todayUnits'),
+            todayConversion: document.getElementById('todayConversion'),
+            todayNegative: document.getElementById('todayNegative'),
+            // Monthly stats elements
+            monthlyRevenue: document.getElementById('monthlyRevenue'),
+            monthlyUnits: document.getElementById('monthlyUnits'),
+            monthlyConversion: document.getElementById('monthlyConversion'),
+            monthlyNegative: document.getElementById('monthlyNegative'),
+            avgDailyRevenue: document.getElementById('avgDailyRevenue'),
+            // Additional daily metrics
+            todayInteractions: document.getElementById('todayInteractions'),
+            todayAvgRevenue: document.getElementById('todayAvgRevenue'),
+            // Additional monthly metrics
+            avgDailyUnits: document.getElementById('avgDailyUnits'),
+            monthlyInteractions: document.getElementById('monthlyInteractions'),
+            monthlyAvgRevenue: document.getElementById('monthlyAvgRevenue')
+        };
+    }
+
+    // Load data for current month from localStorage
+    loadMonthData() {
+        const savedData = localStorage.getItem(`dashboard_${this.monthKey}`);
+        if (savedData) {
+            const data = JSON.parse(savedData);
+            
+            // Migrate old data format where negativeDispositions was a number
+            if (typeof data.negativeDispositions === 'number') {
+                const count = data.negativeDispositions;
+                data.negativeDispositions = [];
+                // Create array entries for existing count
+                for (let i = 0; i < count; i++) {
+                    data.negativeDispositions.push({
+                        timestamp: new Date().toISOString()
+                    });
+                }
+                // Save migrated data immediately
+                localStorage.setItem(`dashboard_${this.monthKey}`, JSON.stringify(data));
+            }
+            
+            return data;
+        }
+        
+        // Return default data structure
+        return {
+            revenue: [],
+            units: [],
+            negativeDispositions: [],
+            conversions: [],
+            totalInteractions: 0
+        };
+    }
+
+    // Save data to localStorage
+    saveData() {
+        localStorage.setItem(`dashboard_${this.monthKey}`, JSON.stringify(this.data));
+    }
+
+    // Bind event listeners
+    bindEvents() {
+        this.elements.addRevenueBtn.addEventListener('click', () => this.addRevenue());
+        this.elements.revenueInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') this.addRevenue();
+        });
+
+        this.elements.negativeBtn.addEventListener('click', () => this.addNegativeDisposition());
+        this.elements.resetDataBtn.addEventListener('click', () => this.resetMonthData());
+        this.elements.exportDataBtn.addEventListener('click', () => this.exportData());
+        this.elements.importFileInput.addEventListener('change', (e) => this.importData(e));
+    }
+
+    // Add revenue
+    addRevenue() {
+        const inputValue = this.elements.revenueInput.value.trim();
+        let amount = 0;
+        
+        // If input is empty, treat as £0 revenue
+        if (inputValue === '') {
+            amount = 0;
+        } else {
+            amount = parseFloat(inputValue);
+            if (isNaN(amount) || amount < 0) {
+                alert('Please enter a valid amount');
+                return;
+            }
+        }
+
+        this.data.revenue.push({
+            amount: amount,
+            timestamp: new Date().toISOString()
+        });
+
+        // Always add to units sold when Add button is clicked
+        this.data.units.push({
+            count: 1,
+            timestamp: new Date().toISOString()
+        });
+
+        this.data.totalInteractions++;
+        this.calculateConversion();
+        this.elements.revenueInput.value = '';
+        this.saveData();
+        this.updateDisplay();
+        this.updateGauges();
+        this.updateCharts();
+        this.updateHourlyChart();
+    }
+
+    // Add negative disposition
+    addNegativeDisposition() {
+        this.data.negativeDispositions.push({
+            timestamp: new Date().toISOString()
+        });
+        this.data.totalInteractions++;
+        this.calculateConversion();
+        this.saveData();
+        this.updateDisplay();
+        this.updateGauges();
+        this.updateCharts();
+        this.updateHourlyChart();
+    }
+
+    // Calculate conversion rate
+    calculateConversion() {
+        const totalUnits = this.getTotalUnits();
+        const conversionRate = this.data.totalInteractions > 0 
+            ? (totalUnits / this.data.totalInteractions) * 100 
+            : 0;
+        
+        this.data.conversions.push({
+            rate: conversionRate,
+            timestamp: new Date().toISOString()
+        });
+    }
+
+    // Get total revenue
+    getTotalRevenue() {
+        return this.data.revenue.reduce((sum, item) => sum + item.amount, 0);
+    }
+
+    // Get total units
+    getTotalUnits() {
+        return this.data.units.reduce((sum, item) => sum + item.count, 0);
+    }
+
+    // Get current conversion rate
+    getCurrentConversion() {
+        if (this.data.conversions.length === 0) return 0;
+        return this.data.conversions[this.data.conversions.length - 1].rate;
+    }
+
+    // Get highest conversion
+    getHighestConversion() {
+        if (this.data.conversions.length === 0) return 0;
+        return Math.max(...this.data.conversions.map(c => c.rate));
+    }
+
+    // Get lowest conversion
+    getLowestConversion() {
+        if (this.data.conversions.length === 0) return 0;
+        return Math.min(...this.data.conversions.map(c => c.rate));
+    }
+
+    // Get highest units (daily)
+    getHighestUnits() {
+        if (this.data.units.length === 0) return 0;
+        // Group by day and find highest
+        const dailyUnits = {};
+        this.data.units.forEach(unit => {
+            const day = new Date(unit.timestamp).toDateString();
+            dailyUnits[day] = (dailyUnits[day] || 0) + unit.count;
+        });
+        return Math.max(...Object.values(dailyUnits), 0);
+    }
+
+    // Get lowest units (daily)
+    getLowestUnits() {
+        if (this.data.units.length === 0) return 0;
+        // Group by day and find lowest
+        const dailyUnits = {};
+        this.data.units.forEach(unit => {
+            const day = new Date(unit.timestamp).toDateString();
+            dailyUnits[day] = (dailyUnits[day] || 0) + unit.count;
+        });
+        const values = Object.values(dailyUnits);
+        return values.length > 0 ? Math.min(...values) : 0;
+    }
+
+    // Get today's statistics
+    getTodayStats() {
+        const today = new Date().toDateString();
+        let todayRevenue = 0;
+        let todayUnits = 0;
+        let todayNegative = 0;
+        
+        // Calculate today's revenue
+        this.data.revenue.forEach(entry => {
+            if (new Date(entry.timestamp).toDateString() === today) {
+                todayRevenue += entry.amount;
+            }
+        });
+        
+        // Calculate today's units
+        this.data.units.forEach(unit => {
+            if (new Date(unit.timestamp).toDateString() === today) {
+                todayUnits += unit.count;
+            }
+        });
+        
+        // Calculate today's negative dispositions
+        this.data.negativeDispositions.forEach(negative => {
+            if (new Date(negative.timestamp).toDateString() === today) {
+                todayNegative++;
+            }
+        });
+        
+        // Calculate today's conversion rate and additional metrics
+        const todayInteractions = todayUnits + todayNegative;
+        const todayConversion = todayInteractions > 0 ? (todayUnits / todayInteractions) * 100 : 0;
+        const todayAvgRevenue = todayUnits > 0 ? todayRevenue / todayUnits : 0;
+        
+        return {
+            revenue: todayRevenue,
+            units: todayUnits,
+            conversion: todayConversion,
+            negative: todayNegative,
+            interactions: todayInteractions,
+            avgRevenue: todayAvgRevenue
+        };
+    }
+
+    // Get monthly statistics
+    getMonthlyStats() {
+        const monthlyRevenue = this.getTotalRevenue();
+        const monthlyUnits = this.getTotalUnits();
+        const monthlyConversion = this.getCurrentConversion();
+        const monthlyNegative = this.data.negativeDispositions.length;
+        const monthlyInteractions = monthlyUnits + monthlyNegative;
+        
+        // Calculate averages
+        const currentDay = new Date().getDate();
+        const daysElapsed = currentDay;
+        const avgDailyRevenue = daysElapsed > 0 ? monthlyRevenue / daysElapsed : 0;
+        const avgDailyUnits = daysElapsed > 0 ? monthlyUnits / daysElapsed : 0;
+        const monthlyAvgRevenue = monthlyUnits > 0 ? monthlyRevenue / monthlyUnits : 0;
+        
+        return {
+            revenue: monthlyRevenue,
+            units: monthlyUnits,
+            conversion: monthlyConversion,
+            negative: monthlyNegative,
+            interactions: monthlyInteractions,
+            avgDailyRevenue: avgDailyRevenue,
+            avgDailyUnits: avgDailyUnits,
+            avgRevenue: monthlyAvgRevenue
+        };
+    }
+
+    // Update display
+    updateDisplay() {
+        // Update month display
+        const monthNames = [
+            'January', 'February', 'March', 'April', 'May', 'June',
+            'July', 'August', 'September', 'October', 'November', 'December'
+        ];
+        this.elements.currentMonth.textContent = `${monthNames[this.currentMonth]} ${this.currentYear}`;
+
+        // Update values
+        this.elements.totalRevenue.textContent = `£${this.getTotalRevenue().toLocaleString('en-GB', {minimumFractionDigits: 2})}`;
+        this.elements.conversionRate.textContent = `${this.getCurrentConversion().toFixed(1)}%`;
+        this.elements.highestConversion.textContent = `${this.getHighestConversion().toFixed(1)}%`;
+        this.elements.lowestConversion.textContent = `${this.getLowestConversion().toFixed(1)}%`;
+        this.elements.totalUnits.textContent = this.getTotalUnits();
+        this.elements.highestUnits.textContent = this.getHighestUnits();
+        this.elements.lowestUnits.textContent = this.getLowestUnits();
+        this.elements.negativeDisposition.textContent = this.data.negativeDispositions.length;
+
+        // Update gauge values
+        this.elements.unitGaugeValue.textContent = this.getTotalUnits();
+        this.elements.negativeGaugeValue.textContent = this.data.negativeDispositions.length;
+        this.elements.conversionGaugeValue.textContent = `${this.getCurrentConversion().toFixed(1)}%`;
+        
+        // Update daily stats
+        const todayStats = this.getTodayStats();
+        this.elements.todayRevenue.textContent = `£${todayStats.revenue.toLocaleString('en-GB', {minimumFractionDigits: 2})}`;
+        this.elements.todayUnits.textContent = todayStats.units;
+        this.elements.todayConversion.textContent = `${todayStats.conversion.toFixed(1)}%`;
+        this.elements.todayNegative.textContent = todayStats.negative;
+        this.elements.todayInteractions.textContent = todayStats.interactions;
+        this.elements.todayAvgRevenue.textContent = `£${todayStats.avgRevenue.toLocaleString('en-GB', {minimumFractionDigits: 2})}`;
+        
+        // Update monthly stats
+        const monthlyStats = this.getMonthlyStats();
+        this.elements.monthlyRevenue.textContent = `£${monthlyStats.revenue.toLocaleString('en-GB', {minimumFractionDigits: 2})}`;
+        this.elements.monthlyUnits.textContent = monthlyStats.units;
+        this.elements.monthlyConversion.textContent = `${monthlyStats.conversion.toFixed(1)}%`;
+        this.elements.monthlyNegative.textContent = monthlyStats.negative;
+        this.elements.avgDailyRevenue.textContent = `£${monthlyStats.avgDailyRevenue.toLocaleString('en-GB', {minimumFractionDigits: 2})}`;
+        this.elements.avgDailyUnits.textContent = monthlyStats.avgDailyUnits.toFixed(1);
+        this.elements.monthlyInteractions.textContent = monthlyStats.interactions;
+        this.elements.monthlyAvgRevenue.textContent = `£${monthlyStats.avgRevenue.toLocaleString('en-GB', {minimumFractionDigits: 2})}`;
+    }
+
+    // Initialize gauges
+    initializeGauges() {
+        this.createGauge('unitGauge', this.getTotalUnits(), 100, '#8B5CF6');
+        this.createGauge('negativeGauge', this.data.negativeDispositions.length, 50, '#EF4444');
+        this.createGauge('conversionGauge', this.getCurrentConversion(), 100, '#3B82F6');
+    }
+
+    // Create dial gauge
+    createGauge(canvasId, value, max, color) {
+        const canvas = document.getElementById(canvasId);
+        const ctx = canvas.getContext('2d');
+        
+        // Clear canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2 + 20;
+        const radius = 70;
+        const startAngle = Math.PI + Math.PI / 4; // Start at 225 degrees
+        const endAngle = Math.PI * 2 - Math.PI / 4; // End at 315 degrees
+        const totalAngle = endAngle - startAngle;
+        
+        // Draw outer ring
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius + 5, 0, Math.PI * 2);
+        ctx.strokeStyle = '#F3F4F6';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // Draw background arc
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, startAngle, endAngle);
+        ctx.strokeStyle = '#E5E7EB';
+        ctx.lineWidth = 8;
+        ctx.stroke();
+        
+        // Draw tick marks
+        for (let i = 0; i <= 10; i++) {
+            const tickAngle = startAngle + (totalAngle * i / 10);
+            const tickStartRadius = radius - 15;
+            const tickEndRadius = radius - 5;
+            
+            const startX = centerX + Math.cos(tickAngle) * tickStartRadius;
+            const startY = centerY + Math.sin(tickAngle) * tickStartRadius;
+            const endX = centerX + Math.cos(tickAngle) * tickEndRadius;
+            const endY = centerY + Math.sin(tickAngle) * tickEndRadius;
+            
+            ctx.beginPath();
+            ctx.moveTo(startX, startY);
+            ctx.lineTo(endX, endY);
+            ctx.strokeStyle = '#9CA3AF';
+            ctx.lineWidth = i % 5 === 0 ? 3 : 1;
+            ctx.stroke();
+        }
+        
+        // Draw value arc
+        const percentage = Math.min(value / max, 1);
+        const valueEndAngle = startAngle + (percentage * totalAngle);
+        
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, startAngle, valueEndAngle);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 8;
+        ctx.stroke();
+        
+        // Draw needle
+        const needleAngle = startAngle + (percentage * totalAngle);
+        const needleLength = radius - 10;
+        const needleX = centerX + Math.cos(needleAngle) * needleLength;
+        const needleY = centerY + Math.sin(needleAngle) * needleLength;
+        
+        // Needle shadow
+        ctx.beginPath();
+        ctx.moveTo(centerX + 2, centerY + 2);
+        ctx.lineTo(needleX + 2, needleY + 2);
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        
+        // Needle
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY);
+        ctx.lineTo(needleX, needleY);
+        ctx.strokeStyle = '#374151';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        
+        // Center hub
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, 6, 0, Math.PI * 2);
+        ctx.fillStyle = '#374151';
+        ctx.fill();
+        
+        // Inner center hub
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, 3, 0, Math.PI * 2);
+        ctx.fillStyle = '#6B7280';
+        ctx.fill();
+    }
+
+    // Update gauges
+    updateGauges() {
+        this.createGauge('unitGauge', this.getTotalUnits(), 100, '#8B5CF6');
+        this.createGauge('negativeGauge', this.data.negativeDispositions.length, 50, '#EF4444');
+        this.createGauge('conversionGauge', this.getCurrentConversion(), 100, '#3B82F6');
+    }
+
+    // Reset month data
+    resetMonthData() {
+        if (confirm('Are you sure you want to clear all data for this month?')) {
+            this.data = {
+                revenue: [],
+                units: [],
+                negativeDispositions: [],
+                conversions: [],
+                totalInteractions: 0
+            };
+            this.saveData();
+            this.updateDisplay();
+            this.updateGauges();
+            this.updateCharts();
+            this.updateHourlyChart();
+        }
+    }
+    
+    // Check if month has changed and reset data automatically
+    checkMonthChange() {
+        const currentDate = new Date();
+        const currentMonth = currentDate.getMonth();
+        const currentYear = currentDate.getFullYear();
+        
+        if (currentMonth !== this.currentMonth || currentYear !== this.currentYear) {
+            this.currentMonth = currentMonth;
+            this.currentYear = currentYear;
+            this.monthKey = `${this.currentYear}-${this.currentMonth}`;
+            this.data = this.loadMonthData();
+            this.updateDisplay();
+            this.updateGauges();
+            this.updateCharts();
+            this.updateHourlyChart();
+        }
+    }
+
+    // Export all dashboard data
+    exportData() {
+        try {
+            // Get all dashboard data from localStorage
+            const allData = {};
+            
+            // Iterate through all localStorage keys to find dashboard data
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && key.startsWith('dashboard_')) {
+                    const monthKey = key.replace('dashboard_', '');
+                    allData[monthKey] = JSON.parse(localStorage.getItem(key));
+                }
+            }
+
+            // Create export object with metadata
+            const exportData = {
+                exportDate: new Date().toISOString(),
+                version: '1.0',
+                dashboardData: allData
+            };
+
+            // Create and download file
+            const dataStr = JSON.stringify(exportData, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(dataBlob);
+            link.download = `dashboard_backup_${new Date().toISOString().split('T')[0]}.json`;
+            
+            // Trigger download
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            alert('Data exported successfully!');
+        } catch (error) {
+            console.error('Export error:', error);
+            alert('Error exporting data. Please try again.');
+        }
+    }
+
+    // Import dashboard data
+    importData(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const importedData = JSON.parse(e.target.result);
+                
+                // Validate data structure
+                if (!importedData.dashboardData || typeof importedData.dashboardData !== 'object') {
+                    throw new Error('Invalid data format');
+                }
+
+                // Confirm import with user
+                const monthCount = Object.keys(importedData.dashboardData).length;
+                if (!confirm(`This will import data for ${monthCount} month(s). This will overwrite existing data. Continue?`)) {
+                    return;
+                }
+
+                // Import each month's data
+                Object.entries(importedData.dashboardData).forEach(([monthKey, data]) => {
+                    // Validate each month's data structure
+                    const requiredFields = ['revenue', 'units', 'negativeDispositions', 'conversions', 'totalInteractions'];
+                    const hasAllFields = requiredFields.every(field => data.hasOwnProperty(field));
+                    
+                    if (hasAllFields) {
+                        localStorage.setItem(`dashboard_${monthKey}`, JSON.stringify(data));
+                    }
+                });
+
+                // Reload current month data
+                this.data = this.loadMonthData();
+                this.updateDisplay();
+                this.updateGauges();
+                this.updateCharts();
+                this.updateHourlyChart();
+                
+                alert(`Data imported successfully! Imported ${monthCount} month(s) of data.`);
+                
+            } catch (error) {
+                console.error('Import error:', error);
+                alert('Error importing data. Please check the file format and try again.');
+            }
+        };
+
+        reader.readAsText(file);
+        
+        // Reset file input
+        event.target.value = '';
+    }
+
+    // Initialize charts
+    initializeCharts() {
+        // Initialize Units Chart
+        const unitsCtx = document.getElementById('unitsChart').getContext('2d');
+        this.unitsChart = new Chart(unitsCtx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Units Sold',
+                    data: [],
+                    borderColor: '#8B5CF6',
+                    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4,
+                    pointBackgroundColor: '#8B5CF6',
+                    pointBorderColor: '#8B5CF6',
+                    pointRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.1)'
+                        }
+                    },
+                    x: {
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.1)'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    }
+                }
+            }
+        });
+
+        // Initialize Conversions Chart
+        const conversionsCtx = document.getElementById('conversionsChart').getContext('2d');
+        this.conversionsChart = new Chart(conversionsCtx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Conversion Rate (%)',
+                    data: [],
+                    borderColor: '#3B82F6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4,
+                    pointBackgroundColor: '#3B82F6',
+                    pointBorderColor: '#3B82F6',
+                    pointRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.1)'
+                        },
+                        ticks: {
+                            callback: function(value) {
+                                return value + '%';
+                            }
+                        }
+                    },
+                    x: {
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.1)'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    }
+                }
+            }
+        });
+
+        this.updateCharts();
+    }
+
+    // Update charts with current data
+    updateCharts() {
+        if (!this.unitsChart || !this.conversionsChart) return;
+
+        // Get daily data for the current month
+        const dailyData = this.getDailyData();
+        
+        // Update Units Chart
+        this.unitsChart.data.labels = dailyData.labels;
+        this.unitsChart.data.datasets[0].data = dailyData.units;
+        this.unitsChart.update();
+
+        // Update Conversions Chart
+        this.conversionsChart.data.labels = dailyData.labels;
+        this.conversionsChart.data.datasets[0].data = dailyData.conversions;
+        this.conversionsChart.update();
+    }
+
+    // Get daily aggregated data for charts
+    getDailyData() {
+        const dailyUnits = {};
+        const dailyConversions = {};
+        
+        // Aggregate units by day
+        this.data.units.forEach(unit => {
+            const day = new Date(unit.timestamp).toLocaleDateString('en-GB', { 
+                day: '2-digit', 
+                month: '2-digit' 
+            });
+            dailyUnits[day] = (dailyUnits[day] || 0) + unit.count;
+        });
+
+        // Aggregate conversions by day
+        this.data.conversions.forEach(conversion => {
+            const day = new Date(conversion.timestamp).toLocaleDateString('en-GB', { 
+                day: '2-digit', 
+                month: '2-digit' 
+            });
+            dailyConversions[day] = conversion.rate;
+        });
+
+        // Get all days in chronological order
+        const allDays = new Set([
+            ...Object.keys(dailyUnits),
+            ...Object.keys(dailyConversions)
+        ]);
+
+        const sortedDays = Array.from(allDays).sort((a, b) => {
+            const [dayA, monthA] = a.split('/').map(Number);
+            const [dayB, monthB] = b.split('/').map(Number);
+            const dateA = new Date(this.currentYear, monthA - 1, dayA);
+            const dateB = new Date(this.currentYear, monthB - 1, dayB);
+            return dateA - dateB;
+        });
+
+        return {
+            labels: sortedDays,
+            units: sortedDays.map(day => dailyUnits[day] || 0),
+            conversions: sortedDays.map(day => dailyConversions[day] || 0)
+        };
+    }
+
+    // Initialize hourly chart
+    initializeHourlyChart() {
+        const hourlyCtx = document.getElementById('hourlyUnitsChart').getContext('2d');
+        this.hourlyUnitsChart = new Chart(hourlyCtx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Units per Hour',
+                    data: [],
+                    borderColor: '#F59E0B',
+                    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4,
+                    pointBackgroundColor: '#F59E0B',
+                    pointBorderColor: '#F59E0B',
+                    pointRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.1)'
+                        }
+                    },
+                    x: {
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.1)'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            title: function(context) {
+                                return `Hour: ${context[0].label}`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        this.updateHourlyChart();
+    }
+
+    // Update hourly chart with today's data
+    updateHourlyChart() {
+        if (!this.hourlyUnitsChart) return;
+
+        const hourlyData = this.getHourlyData();
+        
+        this.hourlyUnitsChart.data.labels = hourlyData.labels;
+        this.hourlyUnitsChart.data.datasets[0].data = hourlyData.units;
+        this.hourlyUnitsChart.update();
+    }
+
+    // Get hourly aggregated data for today
+    getHourlyData() {
+        const today = new Date().toDateString();
+        const hourlyUnits = {};
+        
+        // Initialize all hours with 0
+        for (let hour = 0; hour < 24; hour++) {
+            const hourLabel = hour.toString().padStart(2, '0') + ':00';
+            hourlyUnits[hourLabel] = 0;
+        }
+        
+        // Aggregate units by hour for today only
+        this.data.units.forEach(unit => {
+            const unitDate = new Date(unit.timestamp);
+            const unitDay = unitDate.toDateString();
+            
+            if (unitDay === today) {
+                const hour = unitDate.getHours();
+                const hourLabel = hour.toString().padStart(2, '0') + ':00';
+                hourlyUnits[hourLabel] += unit.count;
+            }
+        });
+
+        // Get hours that have data or are in the past/present
+        const currentHour = new Date().getHours();
+        const relevantHours = [];
+        const relevantValues = [];
+        
+        for (let hour = 0; hour <= Math.max(currentHour + 1, 23); hour++) {
+            const hourLabel = hour.toString().padStart(2, '0') + ':00';
+            relevantHours.push(hourLabel);
+            relevantValues.push(hourlyUnits[hourLabel]);
+        }
+
+        return {
+            labels: relevantHours,
+            units: relevantValues
+        };
+    }
+}
+
+// Initialize dashboard when DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    const dashboard = new BusinessDashboard();
+    
+    // Check for month change every hour
+    setInterval(() => {
+        dashboard.checkMonthChange();
+    }, 3600000);
+});
+// Reset daily data
+    function resetDailyData() {
+       if (confirm('Are you sure you want to clear all data for this month?')) {
+            this.data = {
+                todayRevenue: 0,
+                todayUnits: 0,
+                todayNegative: 0,
+                
+                
+                conversions: 0,
+                totalInteractions: 0
+            };
+            this.saveData();
+            this.updateDisplay();
+            this.updateGauges();
+            this.updateCharts();
+            this.updateHourlyChart();
+        }
+    }
+    </script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">Business Performance Dashboard</h1>
+            <p class="text-gray-600" id="currentMonth"></p>
+        </div>
+
+        <!-- Key Metrics Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <!-- Revenue Card -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h3 class="text-lg font-semibold text-gray-700 mb-4">Monthly Revenue</h3>
+                <div class="text-3xl font-bold text-green-600 mb-4" id="totalRevenue">£0</div>
+                <div class="flex gap-2">
+                    <input type="number" id="revenueInput" placeholder="Enter amount" 
+                           class="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <button id="addRevenueBtn" 
+                            class="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors">
+                        Add
+                    </button>
+                </div>
+            </div>
+
+            <!-- Conversion Metrics -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h3 class="text-lg font-semibold text-gray-700 mb-4">Conversion Rate</h3>
+                <div class="text-3xl font-bold text-blue-600 mb-2" id="conversionRate">0%</div>
+                <div class="text-sm text-gray-500">
+                    <div>Highest: <span id="highestConversion" class="text-green-600 font-semibold">0%</span></div>
+                    <div>Lowest: <span id="lowestConversion" class="text-red-600 font-semibold">0%</span></div>
+                </div>
+            </div>
+
+            <!-- Units Metrics -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h3 class="text-lg font-semibold text-gray-700 mb-4">Units Sold</h3>
+                <div class="text-3xl font-bold text-purple-600 mb-2" id="totalUnits">0</div>
+                <div class="text-sm text-gray-500">
+                    <div>Highest: <span id="highestUnits" class="text-green-600 font-semibold">0</span></div>
+                    <div>Lowest: <span id="lowestUnits" class="text-red-600 font-semibold">0</span></div>
+                </div>
+            </div>
+
+            <!-- Negative Disposition -->
+            <div class="bg-white rounded-lg shadow-md p-6 flex flex-col">
+                <h3 class="text-lg font-semibold text-gray-700 mb-4">Negative Disposition</h3>
+                <div class="text-3xl font-bold text-red-600 mb-4 flex-grow" id="negativeDisposition">0</div>
+                <button id="negativeBtn" 
+                        class="w-full px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors mt-auto">
+                    Add Negative
+                </button>
+            </div>
+        </div>
+
+        <!-- Daily and Monthly Performance -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <!-- Daily Performance -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h3 class="text-xl font-bold text-gray-800 mb-6">Daily Performance</h3>
+                
+                <!-- Core Metrics -->
+                <div class="grid grid-cols-2 gap-4 mb-6">
+                    <div class="text-center p-3 bg-green-50 rounded-lg">
+                        <div class="text-2xl font-bold text-green-600" id="todayRevenue">£0</div>
+                        <div class="text-sm text-gray-600">Revenue</div>
+                    </div>
+                    <div class="text-center p-3 bg-purple-50 rounded-lg">
+                        <div class="text-2xl font-bold text-purple-600" id="todayUnits">0</div>
+                        <div class="text-sm text-gray-600">Units Sold</div>
+                    </div>
+                    <div class="text-center p-3 bg-blue-50 rounded-lg">
+                        <div class="text-2xl font-bold text-blue-600" id="todayConversion">0%</div>
+                        <div class="text-sm text-gray-600">Conversion Rate</div>
+                    </div>
+                    <div class="text-center p-3 bg-red-50 rounded-lg">
+                        <div class="text-2xl font-bold text-red-600" id="todayNegative">0</div>
+                        <div class="text-sm text-gray-600">Negative Dispositions</div>
+                    </div>
+                </div>
+
+                <!-- Additional Daily Metrics -->
+                <div class="border-t pt-4">
+                    <h4 class="text-md font-semibold text-gray-700 mb-3">Today's Insights</h4>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="text-center">
+                            <div class="text-lg font-bold text-gray-700" id="todayInteractions">0</div>
+                            <div class="text-xs text-gray-500">Total Interactions</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-lg font-bold text-gray-700" id="todayAvgRevenue">£0</div>
+                            <div class="text-xs text-gray-500">Average per Unit</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Monthly Performance -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h3 class="text-xl font-bold text-gray-800 mb-6">Monthly Performance</h3>
+                
+                <!-- Core Metrics -->
+                <div class="grid grid-cols-2 gap-4 mb-6">
+                    <div class="text-center p-3 bg-green-50 rounded-lg">
+                        <div class="text-2xl font-bold text-green-600" id="monthlyRevenue">£0</div>
+                        <div class="text-sm text-gray-600">Total Revenue</div>
+                    </div>
+                    <div class="text-center p-3 bg-purple-50 rounded-lg">
+                        <div class="text-2xl font-bold text-purple-600" id="monthlyUnits">0</div>
+                        <div class="text-sm text-gray-600">Total Units</div>
+                    </div>
+                    <div class="text-center p-3 bg-blue-50 rounded-lg">
+                        <div class="text-2xl font-bold text-blue-600" id="monthlyConversion">0%</div>
+                        <div class="text-sm text-gray-600">Overall Conversion</div>
+                    </div>
+                    <div class="text-center p-3 bg-red-50 rounded-lg">
+                        <div class="text-2xl font-bold text-red-600" id="monthlyNegative">0</div>
+                        <div class="text-sm text-gray-600">Total Negative</div>
+                    </div>
+                </div>
+
+                <!-- Additional Monthly Metrics -->
+                <div class="border-t pt-4">
+                    <h4 class="text-md font-semibold text-gray-700 mb-3">Monthly Insights</h4>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="text-center">
+                            <div class="text-lg font-bold text-green-600" id="avgDailyRevenue">£0</div>
+                            <div class="text-xs text-gray-500">Average Daily Revenue</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-lg font-bold text-purple-600" id="avgDailyUnits">0</div>
+                            <div class="text-xs text-gray-500">Average Daily Units</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-lg font-bold text-gray-700" id="monthlyInteractions">0</div>
+                            <div class="text-xs text-gray-500">Total Interactions</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-lg font-bold text-gray-700" id="monthlyAvgRevenue">£0</div>
+                            <div class="text-xs text-gray-500">Average per Unit</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Gauges Section -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <!-- Unit Count Gauge -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h3 class="text-lg font-semibold text-gray-700 mb-4 text-center">Unit Count</h3>
+                <div class="relative">
+                    <canvas id="unitGauge" width="200" height="200"></canvas>
+                    <div class="absolute inset-0 flex items-center justify-center">
+                        <div class="text-center">
+                            <div class="text-2xl font-bold text-purple-600" id="unitGaugeValue">0</div>
+                            <div class="text-sm text-gray-500">Units</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Negative Disposition Gauge -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h3 class="text-lg font-semibold text-gray-700 mb-4 text-center">Negative Disposition</h3>
+                <div class="relative">
+                    <canvas id="negativeGauge" width="200" height="200"></canvas>
+                    <div class="absolute inset-0 flex items-center justify-center">
+                        <div class="text-center">
+                            <div class="text-2xl font-bold text-red-600" id="negativeGaugeValue">0</div>
+                            <div class="text-sm text-gray-500">Negative</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Conversion Rate Gauge -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h3 class="text-lg font-semibold text-gray-700 mb-4 text-center">Conversion Rate</h3>
+                <div class="relative">
+                    <canvas id="conversionGauge" width="200" height="200"></canvas>
+                    <div class="absolute inset-0 flex items-center justify-center">
+                        <div class="text-center">
+                            <div class="text-2xl font-bold text-blue-600" id="conversionGaugeValue">0%</div>
+                            <div class="text-sm text-gray-500">Rate</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Section -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <!-- Daily Units Chart -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h3 class="text-lg font-semibold text-gray-700 mb-4">Daily Units Sold</h3>
+                <div class="relative h-64">
+                    <canvas id="unitsChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Daily Conversions Chart -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h3 class="text-lg font-semibold text-gray-700 mb-4">Daily Conversion Rates</h3>
+                <div class="relative h-64">
+                    <canvas id="conversionsChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Hourly Chart Section -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <h3 class="text-lg font-semibold text-gray-700 mb-4">Hourly Units Sold (Today)</h3>
+            <div class="relative h-64">
+                <canvas id="hourlyUnitsChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Data Management Section -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h3 class="text-lg font-semibold text-gray-700 mb-4">Data Management</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- Backup & Restore -->
+                <div>
+                    <h4 class="text-md font-medium text-gray-600 mb-3">Backup & Restore</h4>
+                    <div class="flex gap-2 mb-2">
+                        <button id="exportDataBtn" 
+                                class="flex-1 px-3 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors">
+                            Export Data
+                        </button>
+                        <label class="flex-1 px-3 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors cursor-pointer text-center">
+                            Import Data
+                            <input type="file" id="importFileInput" accept=".json" class="hidden">
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Reset Options -->
+                <div>
+                    <h4 class="text-md font-medium text-gray-600 mb-3">Reset Options</h4>
+                    <div class="flex gap-2">
+                        <button id="resetDailyDataBtn" onclick="resetDailyData()"
+                                class="flex-1 px-3 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 transition-colors">
+                            Reset Daily Stats
+                        </button>
+                        <button id="resetDataBtn" 
+                                class="flex-1 px-3 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors">
+                            Reset All Data
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+   <!-- <script src="script.js"></script> --> 
+</body>
+</html>
