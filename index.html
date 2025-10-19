@@ -277,9 +277,13 @@ class BusinessDashboard {
     addRevenue() {
         const inputValue = this.elements.revenueInput.value.trim();
         let amount = 0;
-        
+        // if input is higher than 999 show alert
+        if(inputValue > 999){
+            alert('Value excessed maximum of £999');
+            return;
+        }
         // If input is empty, treat as £0 revenue
-        if (inputValue === '') {
+        else if (inputValue === '') {
             amount = 0;
         } else {
             amount = parseFloat(inputValue);
