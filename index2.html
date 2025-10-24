@@ -265,7 +265,7 @@
                             </div>
                             <div>
                                 <p class="font-medium text-gray-900">Units Performance</p>
-                                <p class="text-sm text-gray-500">Target: 100 units/month</p>
+                                <!--<p class="text-sm text-gray-500">Target: 100 units/month</p> -->
                             </div>
                         </div>
 
@@ -282,7 +282,7 @@
                             </div>
                             <div>
                                 <p class="font-medium text-gray-900">Conversion Rate</p>
-                                <p class="text-sm text-gray-500">Target: 80%</p>
+                               <!-- <p class="text-sm text-gray-500">Target: 80%</p> -->
                             </div>
                         </div>
                     </div>
@@ -554,7 +554,10 @@
             addRevenue() {
                 const inputValue = this.elements.revenueInput.value.trim();
                 let amount = 0;
-                
+                if(inputValue > 999){
+                    alert('Amount exceeds maximum limit of £999');
+                    return;
+                }
                 // If input is empty, treat as £0 revenue
                 if (inputValue === '') {
                     amount = 0;
