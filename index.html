@@ -266,7 +266,7 @@
                             <div>
                                 <p class="font-medium text-gray-900">Month units target</p>
                                 <!--<p class="text-sm text-gray-500">Target: 100 units/month</p> -->
-                                <input type="number" placeholder="Set monthly target" id="month-unit-target" class="border border-blue-200" onfocusout="saveInputStats()">
+                                <input type="number" min="1" step="1" placeholder="Set monthly target" id="month-unit-target" class="border border-blue-200" onfocusout="saveInputStats()">
                             </div>
                         </div>
 
@@ -284,7 +284,7 @@
                             <div>
                                 <p class="font-medium text-gray-900">Conversion Rate</p>
                                <!-- <p class="text-sm text-gray-500">Target: 80%</p> -->
-                                <input type="number" id="conversion-target-input" placeholder="Set conversion target" class="border border-blue-200">
+                                <input type="number" min="1" step="0.1" id="conversion-target-input" placeholder="Set conversion target" class="border border-blue-200" onfocusout="saveInputStats()">
                             </div>
                         </div>
                     </div>
@@ -435,12 +435,22 @@
 
     <script>
 
-        // Load stats input boxes to local storage
+        // Persist and restore gauge target inputs
             function saveInputStats() {
-                
-                
-                document.getElementById('conversion-target-input').innerHTML = localStorage.getItem('monthconversiontarget');
-                document.getElementById('month-unit-target').value = localStorage.getItem('monthUnitTarget');
+                const unitTargetInput = document.getElementById('month-unit-target');
+                const conversionTargetInput = document.getElementById('conversion-target-input');
+                if (!unitTargetInput || !conversionTargetInput) return;
+
+                const monthUnitTarget = parseFloat(unitTargetInput.value);
+                const monthConversionTarget = parseFloat(conversionTargetInput.value);
+
+                if (!isNaN(monthUnitTarget) && monthUnitTarget > 0) {
+                    localStorage.setItem('monthUnitTarget', monthUnitTarget);
+                }
+
+                if (!isNaN(monthConversionTarget) && monthConversionTarget > 0) {
+                    localStorage.setItem('monthConversionTarget', monthConversionTarget);
+                }
             }
                 
             
@@ -560,6 +570,22 @@
                 // History modal events
                 document.getElementById('closeHistoryModal').addEventListener('click', () => this.hideHistory());
                 document.getElementById('historyMonthSelect').addEventListener('change', (e) => this.loadHistoryForMonth(e.target.value));
+
+                // Gauge target inputs
+                const unitTargetInput = document.getElementById('month-unit-target');
+                const conversionTargetInput = document.getElementById('conversion-target-input');
+                if (unitTargetInput) {
+                    unitTargetInput.addEventListener('input', () => {
+                        saveInputStats();
+                        this.updateGauges();
+                    });
+                }
+                if (conversionTargetInput) {
+                    conversionTargetInput.addEventListener('input', () => {
+                        saveInputStats();
+                        this.updateGauges();
+                    });
+                }
             }
 
             // Add revenue
@@ -788,23 +814,38 @@
 
             // Initialize performance gauges
             initializeGauges() {
+                const unitTargetInput = document.getElementById('month-unit-target');
+                const conversionTargetInput = document.getElementById('conversion-target-input');
+
+                const savedUnitTarget = localStorage.getItem('monthUnitTarget');
+                const savedConversionTarget = localStorage.getItem('monthConversionTarget');
+
+                if (unitTargetInput) {
+                    unitTargetInput.value = savedUnitTarget && parseFloat(savedUnitTarget) > 0 ? savedUnitTarget : '100';
+                }
+                if (conversionTargetInput) {
+                    conversionTargetInput.value = savedConversionTarget && parseFloat(savedConversionTarget) > 0 ? savedConversionTarget : '80';
+                }
+
                 this.updateGauges();
             }
             
             // Update performance gauges
             updateGauges() {
                 const monthlyStats = this.getMonthlyStats();
-                const monthUnitTarget = document.getElementById('month-unit-target').value;
-                localStorage.getItem('monthUnitTarget', monthUnitTarget);
-                // Units gauge (target: 100 units/month)
+                const monthUnitTargetInput = document.getElementById('month-unit-target');
+                const monthUnitTarget = parseFloat(monthUnitTargetInput ? monthUnitTargetInput.value : '100') || 100;
+                localStorage.setItem('monthUnitTarget', monthUnitTarget);
+                // Units gauge
                 const unitPercentage = Math.min((monthlyStats.units / monthUnitTarget) * 100, 100);
                 this.updateGauge('unitGaugeFill', unitPercentage);
                 this.elements.unitGaugeValue.textContent = monthlyStats.units;
 
-                // Conversion gauge (target: 80%)
-                const monthConversiontarget = document.getElementById('conversion-target-input').value;
-                localStorage.setItem('monthConversiontarget', monthConversiontarget);
-                const conversionPercentage = Math.min((monthlyStats.conversion / monthConversiontarget) * 100, 100);
+                // Conversion gauge
+                const monthConversionTargetInput = document.getElementById('conversion-target-input');
+                const monthConversionTarget = parseFloat(monthConversionTargetInput ? monthConversionTargetInput.value : '80') || 80;
+                localStorage.setItem('monthConversionTarget', monthConversionTarget);
+                const conversionPercentage = Math.min((monthlyStats.conversion / monthConversionTarget) * 100, 100);
                 this.updateGauge('conversionGaugeFill', conversionPercentage);
                 this.elements.conversionGaugeValue.textContent = `${monthlyStats.conversion.toFixed(1)}%`;
             }
@@ -1207,7 +1248,7 @@
                         this.updateGauges();
                         this.updateCharts();
                         this.updateHourlyChart();
-                        localStorage.getItem('monthUnitTarget', document.getElementById('month-unit-target').innerText);
+                        saveInputStats();
 
                         alert(`Successfully imported data for ${monthCount} month(s)`);
                     } catch (error) {
