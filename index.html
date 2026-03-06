@@ -671,16 +671,60 @@
                 return this.data.conversions[this.data.conversions.length - 1].rate;
             }
 
+            // Build daily conversion rates from units and negative dispositions
+            getDailyConversionRates() {
+                const dailyStats = {};
+
+                this.data.units.forEach(unit => {
+                    const day = new Date(unit.timestamp).toDateString();
+                    if (!dailyStats[day]) {
+                        dailyStats[day] = { units: 0, negative: 0 };
+                    }
+                    dailyStats[day].units += unit.count;
+                });
+
+                this.data.negativeDispositions.forEach(negative => {
+                    const day = new Date(negative.timestamp).toDateString();
+                    if (!dailyStats[day]) {
+                        dailyStats[day] = { units: 0, negative: 0 };
+                    }
+                    dailyStats[day].negative += 1;
+                });
+
+                const dailyRates = {};
+                Object.keys(dailyStats).forEach(day => {
+                    const dayUnits = dailyStats[day].units;
+                    const dayInteractions = dayUnits + dailyStats[day].negative;
+                    dailyRates[day] = dayInteractions > 0 ? (dayUnits / dayInteractions) * 100 : 0;
+                });
+
+                return dailyRates;
+            }
+
+            // Get sorted day labels and daily conversion values for performance overview
+            getDailyConversionSeries() {
+                const dailyRates = this.getDailyConversionRates();
+                const days = Object.keys(dailyRates).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+
+                return {
+                    labels: days.map(day => new Date(day).toLocaleDateString('en-GB', {
+                        day: '2-digit',
+                        month: '2-digit'
+                    })),
+                    conversions: days.map(day => dailyRates[day])
+                };
+            }
+
             // Get highest conversion
             getHighestConversion() {
-                if (this.data.conversions.length === 0) return 0;
-                return Math.max(...this.data.conversions.map(c => c.rate));
+                const dailyRates = Object.values(this.getDailyConversionRates());
+                return dailyRates.length > 0 ? Math.max(...dailyRates) : 0;
             }
 
             // Get lowest conversion
             getLowestConversion() {
-                if (this.data.conversions.length === 0) return 0;
-                return Math.min(...this.data.conversions.map(c => c.rate));
+                const dailyRates = Object.values(this.getDailyConversionRates());
+                return dailyRates.length > 0 ? Math.min(...dailyRates) : 0;
             }
 
             // Get highest units (daily)
@@ -929,8 +973,7 @@
             updatePerformanceChart() {
                 const ctx = document.getElementById('performanceChart');
                 if (!ctx) return;
-
-                const chartData = this.getDailyChartData();
+                const chartData = this.getDailyConversionSeries();
 
                 if (this.performanceChart) {
                     this.performanceChart.destroy();
@@ -947,7 +990,7 @@
                             backgroundColor: 'rgba(139, 92, 246, 0.1)',
                             borderWidth: 2,
                             fill: true,
-                            tension: 0.4,
+                            tension: 0,
                             pointBackgroundColor: '#8b5cf6',
                             pointBorderColor: '#8b5cf6',
                             pointRadius: 4
@@ -1047,6 +1090,7 @@
                 const dailyUnits = {};
                 const dailyConversions = {};
                 const dailyRevenue = {};
+                const dailyConversionRates = this.getDailyConversionRates();
                 
                 // Aggregate units by day
                 this.data.units.forEach(unit => {
@@ -1057,13 +1101,13 @@
                     dailyUnits[day] = (dailyUnits[day] || 0) + unit.count;
                 });
 
-                // Aggregate conversions by day
-                this.data.conversions.forEach(conversion => {
-                    const day = new Date(conversion.timestamp).toLocaleDateString('en-GB', { 
-                        day: '2-digit', 
-                        month: '2-digit' 
+                // Aggregate daily conversion rates by day
+                Object.keys(dailyConversionRates).forEach(dayKey => {
+                    const day = new Date(dayKey).toLocaleDateString('en-GB', {
+                        day: '2-digit',
+                        month: '2-digit'
                     });
-                    dailyConversions[day] = conversion.rate;
+                    dailyConversions[day] = dailyConversionRates[dayKey];
                 });
 
                 // Aggregate revenue by day
