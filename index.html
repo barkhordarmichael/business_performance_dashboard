@@ -260,7 +260,7 @@
                                     <circle cx="50%" cy="50%" r="50" class="gauge-fill" stroke="#10b981" id="unitGaugeFill"/>
                                 </svg>
                                 <div class="absolute inset-0 flex items-center justify-center">
-                                    <span class="text-lg font-bold text-gray-900" id="unitGaugeValue">0</span>
+                                    <span class="text-lg font-bold text-gray-900" id="unitGaugeValue">0%</span>
                                 </div>
                             </div>
                             <div>
@@ -883,7 +883,8 @@
                 // Units gauge
                 const unitPercentage = Math.min((monthlyStats.units / monthUnitTarget) * 100, 100);
                 this.updateGauge('unitGaugeFill', unitPercentage);
-                this.elements.unitGaugeValue.textContent = monthlyStats.units;
+                // Show progress toward monthly unit target as a percentage
+                this.elements.unitGaugeValue.textContent = `${unitPercentage.toFixed(1)}%`;
 
                 // Conversion gauge
                 const monthConversionTargetInput = document.getElementById('conversion-target-input');
