@@ -229,7 +229,10 @@
                     <div class="space-y-4">
                         <div>
                             <p class="text-gray-500 text-sm">Total Units Sold</p>
-                            <p class="text-3xl font-bold text-gray-900" id="totalUnits">0</p>
+                            <div class="flex items-center gap-3">
+                                <p class="text-3xl font-bold text-gray-900" id="totalUnits">0</p>
+                                <input type="number" min="0" step="1" id="monthly-units-input" placeholder="Edit units" class="w-28 border border-blue-200 rounded-lg px-2 py-1 text-sm" onfocusout="saveInputStats()">
+                            </div>
                         </div>
                         <div class="flex justify-between">
                             <div>
@@ -243,7 +246,10 @@
                         </div>
                         <div>
                             <p class="text-gray-500 text-sm">Current Conversion Rate</p>
-                            <p class="text-2xl font-bold text-gray-900" id="conversionRate">0.0%</p>
+                            <div class="flex items-center gap-3">
+                                <p class="text-2xl font-bold text-gray-900" id="conversionRate">0.0%</p>
+                                <input type="number" min="0" max="100" step="0.1" id="conversion-rate-input" placeholder="Edit %" class="w-28 border border-blue-200 rounded-lg px-2 py-1 text-sm" onfocusout="saveInputStats()">
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -435,14 +441,18 @@
 
     <script>
 
-        // Persist and restore gauge target inputs
+        // Persist and restore gauge target inputs and user overrides
             function saveInputStats() {
                 const unitTargetInput = document.getElementById('month-unit-target');
                 const conversionTargetInput = document.getElementById('conversion-target-input');
-                if (!unitTargetInput || !conversionTargetInput) return;
+                const monthlyUnitsInput = document.getElementById('monthly-units-input');
+                const conversionRateInput = document.getElementById('conversion-rate-input');
+                if (!unitTargetInput || !conversionTargetInput || !monthlyUnitsInput || !conversionRateInput) return;
 
                 const monthUnitTarget = parseFloat(unitTargetInput.value);
                 const monthConversionTarget = parseFloat(conversionTargetInput.value);
+                const monthlyUnitsOverride = parseInt(monthlyUnitsInput.value, 10);
+                const conversionRateOverride = parseFloat(conversionRateInput.value);
 
                 if (!isNaN(monthUnitTarget) && monthUnitTarget > 0) {
                     localStorage.setItem('monthUnitTarget', monthUnitTarget);
@@ -450,6 +460,18 @@
 
                 if (!isNaN(monthConversionTarget) && monthConversionTarget > 0) {
                     localStorage.setItem('monthConversionTarget', monthConversionTarget);
+                }
+
+                if (!isNaN(monthlyUnitsOverride) && monthlyUnitsOverride >= 0) {
+                    localStorage.setItem('monthlyUnitsOverride', monthlyUnitsOverride);
+                } else {
+                    localStorage.removeItem('monthlyUnitsOverride');
+                }
+
+                if (!isNaN(conversionRateOverride) && conversionRateOverride >= 0) {
+                    localStorage.setItem('monthlyConversionOverride', conversionRateOverride);
+                } else {
+                    localStorage.removeItem('monthlyConversionOverride');
                 }
             }
                 
@@ -574,6 +596,8 @@
                 // Gauge target inputs
                 const unitTargetInput = document.getElementById('month-unit-target');
                 const conversionTargetInput = document.getElementById('conversion-target-input');
+                const monthlyUnitsInput = document.getElementById('monthly-units-input');
+                const conversionRateInput = document.getElementById('conversion-rate-input');
                 if (unitTargetInput) {
                     unitTargetInput.addEventListener('input', () => {
                         saveInputStats();
@@ -583,6 +607,20 @@
                 if (conversionTargetInput) {
                     conversionTargetInput.addEventListener('input', () => {
                         saveInputStats();
+                        this.updateGauges();
+                    });
+                }
+                if (monthlyUnitsInput) {
+                    monthlyUnitsInput.addEventListener('input', () => {
+                        saveInputStats();
+                        this.updateDisplay();
+                        this.updateGauges();
+                    });
+                }
+                if (conversionRateInput) {
+                    conversionRateInput.addEventListener('input', () => {
+                        saveInputStats();
+                        this.updateDisplay();
                         this.updateGauges();
                     });
                 }
@@ -669,6 +707,20 @@
             getCurrentConversion() {
                 if (this.data.conversions.length === 0) return 0;
                 return this.data.conversions[this.data.conversions.length - 1].rate;
+            }
+
+            // Get user display units override if provided
+            getDisplayUnits() {
+                const override = localStorage.getItem('monthlyUnitsOverride');
+                const parsed = override !== null ? parseInt(override, 10) : NaN;
+                return !isNaN(parsed) && parsed >= 0 ? parsed : this.getTotalUnits();
+            }
+
+            // Get user display conversion override if provided
+            getDisplayConversion() {
+                const override = localStorage.getItem('monthlyConversionOverride');
+                const parsed = override !== null ? parseFloat(override) : NaN;
+                return !isNaN(parsed) && parsed >= 0 ? parsed : this.getCurrentConversion();
             }
 
             // Build daily conversion rates from units and negative dispositions
@@ -828,6 +880,11 @@
 
                 const todayStats = this.getTodayStats();
                 const monthlyStats = this.getMonthlyStats();
+                const displayUnits = this.getDisplayUnits();
+                const displayConversion = this.getDisplayConversion();
+                const daysElapsed = new Date().getDate();
+                const avgDailyUnits = daysElapsed > 0 ? displayUnits / daysElapsed : 0;
+                const avgRevenuePerUnit = displayUnits > 0 ? monthlyStats.revenue / displayUnits : 0;
 
                 // Update today's metrics
                 this.elements.todayRevenue.textContent = `£${todayStats.revenue.toFixed(2)}`;
@@ -837,38 +894,48 @@
 
                 // Update monthly metrics
                 this.elements.totalRevenue.textContent = `£${monthlyStats.revenue.toFixed(2)}`;
-                this.elements.conversionRate.textContent = `${monthlyStats.conversion.toFixed(1)}%`;
+                this.elements.conversionRate.textContent = `${displayConversion.toFixed(1)}%`;
                 this.elements.highestConversion.textContent = `${this.getHighestConversion().toFixed(1)}%`;
                 this.elements.lowestConversion.textContent = `${this.getLowestConversion().toFixed(1)}%`;
-                this.elements.totalUnits.textContent = this.getTotalUnits();
+                this.elements.totalUnits.textContent = displayUnits;
                 this.elements.highestUnits.textContent = this.getHighestUnits();
                 this.elements.lowestUnits.textContent = this.getLowestUnits();
                 this.elements.negativeDisposition.textContent = monthlyStats.negative;
                 this.elements.avgDailyRevenue.textContent = `£${monthlyStats.avgDailyRevenue.toFixed(2)}`;
-                this.elements.monthlyAvgRevenue.textContent = `£${monthlyStats.avgRevenue.toFixed(2)}`;
+                this.elements.monthlyAvgRevenue.textContent = `£${avgRevenuePerUnit.toFixed(2)}`;
 
                 // Update detailed metrics
-                this.elements.currentConversion.textContent = `${monthlyStats.conversion.toFixed(1)}%`;
-                this.elements.monthlyUnits.textContent = monthlyStats.units;
+                this.elements.currentConversion.textContent = `${displayConversion.toFixed(1)}%`;
+                this.elements.monthlyUnits.textContent = displayUnits;
                 this.elements.monthlyInteractions.textContent = monthlyStats.interactions;
-                this.elements.avgDailyUnits.textContent = monthlyStats.avgDailyUnits.toFixed(1);
+                this.elements.avgDailyUnits.textContent = avgDailyUnits.toFixed(1);
                 this.elements.avgDailyRevenueDetail.textContent = `£${monthlyStats.avgDailyRevenue.toFixed(2)}`;
-                this.elements.avgRevenuePerUnit.textContent = `£${monthlyStats.avgRevenue.toFixed(2)}`;
+                this.elements.avgRevenuePerUnit.textContent = `£${avgRevenuePerUnit.toFixed(2)}`;
             }
 
             // Initialize performance gauges
             initializeGauges() {
                 const unitTargetInput = document.getElementById('month-unit-target');
                 const conversionTargetInput = document.getElementById('conversion-target-input');
+                const monthlyUnitsInput = document.getElementById('monthly-units-input');
+                const conversionRateInput = document.getElementById('conversion-rate-input');
 
                 const savedUnitTarget = localStorage.getItem('monthUnitTarget');
                 const savedConversionTarget = localStorage.getItem('monthConversionTarget');
+                const savedUnitsOverride = localStorage.getItem('monthlyUnitsOverride');
+                const savedConversionOverride = localStorage.getItem('monthlyConversionOverride');
 
                 if (unitTargetInput) {
                     unitTargetInput.value = savedUnitTarget && parseFloat(savedUnitTarget) > 0 ? savedUnitTarget : '100';
                 }
                 if (conversionTargetInput) {
                     conversionTargetInput.value = savedConversionTarget && parseFloat(savedConversionTarget) > 0 ? savedConversionTarget : '80';
+                }
+                if (monthlyUnitsInput) {
+                    monthlyUnitsInput.value = savedUnitsOverride !== null ? savedUnitsOverride : this.getTotalUnits();
+                }
+                if (conversionRateInput) {
+                    conversionRateInput.value = savedConversionOverride !== null ? savedConversionOverride : this.getCurrentConversion().toFixed(1);
                 }
 
                 this.updateGauges();
@@ -877,22 +944,24 @@
             // Update performance gauges
             updateGauges() {
                 const monthlyStats = this.getMonthlyStats();
+                const displayUnits = this.getDisplayUnits();
+                const displayConversion = this.getDisplayConversion();
                 const monthUnitTargetInput = document.getElementById('month-unit-target');
                 const monthUnitTarget = parseFloat(monthUnitTargetInput ? monthUnitTargetInput.value : '100') || 100;
                 localStorage.setItem('monthUnitTarget', monthUnitTarget);
+
                 // Units gauge
-                const unitPercentage = Math.min((monthlyStats.units / monthUnitTarget) * 100, 100);
+                const unitPercentage = Math.min((displayUnits / monthUnitTarget) * 100, 100);
                 this.updateGauge('unitGaugeFill', unitPercentage);
-                // Show progress toward monthly unit target as a percentage
                 this.elements.unitGaugeValue.textContent = `${unitPercentage.toFixed(1)}%`;
 
                 // Conversion gauge
                 const monthConversionTargetInput = document.getElementById('conversion-target-input');
                 const monthConversionTarget = parseFloat(monthConversionTargetInput ? monthConversionTargetInput.value : '80') || 80;
                 localStorage.setItem('monthConversionTarget', monthConversionTarget);
-                const conversionPercentage = Math.min((monthlyStats.conversion / monthConversionTarget) * 100, 100);
+                const conversionPercentage = Math.min((displayConversion / monthConversionTarget) * 100, 100);
                 this.updateGauge('conversionGaugeFill', conversionPercentage);
-                this.elements.conversionGaugeValue.textContent = `${monthlyStats.conversion.toFixed(1)}%`;
+                this.elements.conversionGaugeValue.textContent = `${displayConversion.toFixed(1)}%`;
             }
 
             // Update individual gauge
