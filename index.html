@@ -453,6 +453,9 @@
                 const monthConversionTarget = parseFloat(conversionTargetInput.value);
                 const monthlyUnitsOverride = parseInt(monthlyUnitsInput.value, 10);
                 const conversionRateOverride = parseFloat(conversionRateInput.value);
+                const dashboard = window.dashboardInstance;
+                const actualUnits = dashboard ? dashboard.getTotalUnits() : 0;
+                const actualConversion = dashboard ? dashboard.getCurrentConversion() : 0;
 
                 if (!isNaN(monthUnitTarget) && monthUnitTarget > 0) {
                     localStorage.setItem('monthUnitTarget', monthUnitTarget);
@@ -463,15 +466,15 @@
                 }
 
                 if (!isNaN(monthlyUnitsOverride) && monthlyUnitsOverride >= 0) {
-                    localStorage.setItem('monthlyUnitsOverride', monthlyUnitsOverride);
+                    localStorage.setItem('monthlyUnitsOffset', monthlyUnitsOverride - actualUnits);
                 } else {
-                    localStorage.removeItem('monthlyUnitsOverride');
+                    localStorage.removeItem('monthlyUnitsOffset');
                 }
 
                 if (!isNaN(conversionRateOverride) && conversionRateOverride >= 0) {
-                    localStorage.setItem('monthlyConversionOverride', conversionRateOverride);
+                    localStorage.setItem('monthlyConversionOffset', conversionRateOverride - actualConversion);
                 } else {
-                    localStorage.removeItem('monthlyConversionOverride');
+                    localStorage.removeItem('monthlyConversionOffset');
                 }
             }
                 
@@ -711,16 +714,48 @@
 
             // Get user display units override if provided
             getDisplayUnits() {
-                const override = localStorage.getItem('monthlyUnitsOverride');
-                const parsed = override !== null ? parseInt(override, 10) : NaN;
-                return !isNaN(parsed) && parsed >= 0 ? parsed : this.getTotalUnits();
+                const offsetValue = localStorage.getItem('monthlyUnitsOffset');
+                const absoluteOverride = localStorage.getItem('monthlyUnitsOverride');
+                const offset = offsetValue !== null ? parseFloat(offsetValue) : NaN;
+                const absolute = absoluteOverride !== null ? parseInt(absoluteOverride, 10) : NaN;
+                const base = this.getTotalUnits();
+
+                if (!isNaN(offset)) {
+                    return Math.max(0, base + offset);
+                }
+                if (!isNaN(absolute) && absolute >= 0) {
+                    return absolute;
+                }
+                return base;
             }
 
             // Get user display conversion override if provided
             getDisplayConversion() {
-                const override = localStorage.getItem('monthlyConversionOverride');
-                const parsed = override !== null ? parseFloat(override) : NaN;
-                return !isNaN(parsed) && parsed >= 0 ? parsed : this.getCurrentConversion();
+                const offsetValue = localStorage.getItem('monthlyConversionOffset');
+                const absoluteOverride = localStorage.getItem('monthlyConversionOverride');
+                const offset = offsetValue !== null ? parseFloat(offsetValue) : NaN;
+                const absolute = absoluteOverride !== null ? parseFloat(absoluteOverride) : NaN;
+                const base = this.getCurrentConversion();
+
+                if (!isNaN(offset)) {
+                    return Math.max(0, base + offset);
+                }
+                if (!isNaN(absolute) && absolute >= 0) {
+                    return absolute;
+                }
+                return base;
+            }
+
+            // Sync edit fields with current displayed units and conversion
+            setDisplayInputs() {
+                const monthlyUnitsInput = document.getElementById('monthly-units-input');
+                const conversionRateInput = document.getElementById('conversion-rate-input');
+                if (monthlyUnitsInput) {
+                    monthlyUnitsInput.value = this.getDisplayUnits();
+                }
+                if (conversionRateInput) {
+                    conversionRateInput.value = this.getDisplayConversion().toFixed(1);
+                }
             }
 
             // Build daily conversion rates from units and negative dispositions
@@ -911,6 +946,7 @@
                 this.elements.avgDailyUnits.textContent = avgDailyUnits.toFixed(1);
                 this.elements.avgDailyRevenueDetail.textContent = `£${monthlyStats.avgDailyRevenue.toFixed(2)}`;
                 this.elements.avgRevenuePerUnit.textContent = `£${avgRevenuePerUnit.toFixed(2)}`;
+                this.setDisplayInputs();
             }
 
             // Initialize performance gauges
@@ -922,8 +958,8 @@
 
                 const savedUnitTarget = localStorage.getItem('monthUnitTarget');
                 const savedConversionTarget = localStorage.getItem('monthConversionTarget');
-                const savedUnitsOverride = localStorage.getItem('monthlyUnitsOverride');
-                const savedConversionOverride = localStorage.getItem('monthlyConversionOverride');
+                const savedUnitsOffset = parseFloat(localStorage.getItem('monthlyUnitsOffset'));
+                const savedConversionOffset = parseFloat(localStorage.getItem('monthlyConversionOffset'));
 
                 if (unitTargetInput) {
                     unitTargetInput.value = savedUnitTarget && parseFloat(savedUnitTarget) > 0 ? savedUnitTarget : '100';
@@ -932,10 +968,10 @@
                     conversionTargetInput.value = savedConversionTarget && parseFloat(savedConversionTarget) > 0 ? savedConversionTarget : '80';
                 }
                 if (monthlyUnitsInput) {
-                    monthlyUnitsInput.value = savedUnitsOverride !== null ? savedUnitsOverride : this.getTotalUnits();
+                    monthlyUnitsInput.value = !isNaN(savedUnitsOffset) ? this.getTotalUnits() + savedUnitsOffset : this.getTotalUnits();
                 }
                 if (conversionRateInput) {
-                    conversionRateInput.value = savedConversionOverride !== null ? savedConversionOverride : this.getCurrentConversion().toFixed(1);
+                    conversionRateInput.value = !isNaN(savedConversionOffset) ? (this.getCurrentConversion() + savedConversionOffset).toFixed(1) : this.getCurrentConversion().toFixed(1);
                 }
 
                 this.updateGauges();
@@ -1650,7 +1686,7 @@
 
         // Initialize dashboard when page loads
         document.addEventListener('DOMContentLoaded', () => {
-            new BusinessDashboard();
+            window.dashboardInstance = new BusinessDashboard();
         });
     </script>
 </body>
