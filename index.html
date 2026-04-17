@@ -301,7 +301,7 @@
         <!-- Analytics Charts -->
         <div class="mb-8">
             <h2 class="text-xl font-semibold text-gray-900 mb-4">Analytics</h2>
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <!-- Daily Units Chart -->
                 <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                     <h3 class="text-lg font-semibold text-gray-900 mb-4">Daily Units Trend</h3>
@@ -318,8 +318,17 @@
                     </div>
                 </div>
 
+                <!-- Monthly Hourly Accumulation Chart -->
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Accumulated Units by Hour</h3>
+                    <p class="text-sm text-gray-500 mb-4">Overview of the busiest hour blocks for units over the month.</p>
+                    <div class="h-64">
+                        <canvas id="monthlyHourlyChart"></canvas>
+                    </div>
+                </div>
+
                 <!-- Hourly Activity -->
-                <div class="bg-white rounded-lg shadow-sm border border-gray-200 lg:col-span-2 p-6">
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 lg:col-span-3 p-6">
                     <h3 class="text-lg font-semibold text-gray-900 mb-4">Hourly Activity</h3>
                     <div class="h-64">
                         <canvas id="hourlyChart"></canvas>
@@ -1013,6 +1022,7 @@
             initializeCharts() {
                 this.unitsChart = null;
                 this.performanceChart = null;
+                this.monthlyHourlyChart = null;
                 this.updateCharts();
             }
 
@@ -1020,6 +1030,7 @@
             updateCharts() {
                 this.updateUnitsChart();
                 this.updatePerformanceChart();
+                this.updateMonthlyHourlyChart();
             }
 
             // Update units chart
@@ -1125,6 +1136,68 @@
                             x: {
                                 grid: {
                                     color: 'rgba(0, 0, 0, 0.1)'
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Update monthly hourly accumulation chart
+            updateMonthlyHourlyChart() {
+                const ctx = document.getElementById('monthlyHourlyChart');
+                if (!ctx) return;
+                const chartData = this.getMonthlyHourlyChartData();
+
+                if (this.monthlyHourlyChart) {
+                    this.monthlyHourlyChart.destroy();
+                }
+
+                this.monthlyHourlyChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: chartData.labels,
+                        datasets: [{
+                            label: 'Accumulated Units',
+                            data: chartData.units,
+                            backgroundColor: 'rgba(59, 130, 246, 0.6)',
+                            borderColor: '#3b82f6',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: false
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return `Units: ${context.parsed.y}`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                grid: {
+                                    color: 'rgba(0, 0, 0, 0.1)'
+                                },
+                                title: {
+                                    display: true,
+                                    text: 'Units'
+                                }
+                            },
+                            x: {
+                                grid: {
+                                    color: 'rgba(0, 0, 0, 0.1)'
+                                },
+                                title: {
+                                    display: true,
+                                    text: 'Hour of Day'
                                 }
                             }
                         }
@@ -1288,6 +1361,31 @@
                     labels: relevantHours,
                     units: relevantValues
                 };
+            }
+
+            // Get monthly hourly accumulation chart data
+            getMonthlyHourlyChartData() {
+                const hourlyTotals = {};
+
+                for (let hour = 0; hour < 24; hour++) {
+                    hourlyTotals[hour] = 0;
+                }
+
+                this.data.units.forEach(unit => {
+                    const unitDate = new Date(unit.timestamp);
+                    const hour = unitDate.getHours();
+                    hourlyTotals[hour] += unit.count;
+                });
+
+                const labels = [];
+                const units = [];
+
+                for (let hour = 0; hour < 24; hour++) {
+                    labels.push(hour.toString().padStart(2, '0') + ':00');
+                    units.push(hourlyTotals[hour]);
+                }
+
+                return { labels, units };
             }
 
             // Reset month data
