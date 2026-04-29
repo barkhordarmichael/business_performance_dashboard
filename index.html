@@ -328,11 +328,22 @@
                     </div>
                 </div>
 
-                <!-- Hourly Activity -->
-                <div class="bg-white rounded-lg shadow-sm border border-gray-200 lg:col-span-3 p-6">
-                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Hourly Activity</h3>
-                    <div class="h-64">
-                        <canvas id="hourlyChart"></canvas>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:col-span-3">
+                    <!-- Hourly Activity -->
+                    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Hourly Activity</h3>
+                        <div class="h-64">
+                            <canvas id="hourlyChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Average Units by Day -->
+                    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Average Units by Day</h3>
+                        <p class="text-sm text-gray-500 mb-4">Daily unit averages across the current month.</p>
+                        <div class="h-64">
+                            <canvas id="avgUnitsByDayChart"></canvas>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1024,6 +1035,7 @@
                 this.unitsChart = null;
                 this.performanceChart = null;
                 this.monthlyHourlyChart = null;
+                this.avgUnitsByDayChart = null;
                 this.updateCharts();
             }
 
@@ -1032,6 +1044,7 @@
                 this.updateUnitsChart();
                 this.updatePerformanceChart();
                 this.updateMonthlyHourlyChart();
+                this.updateAvgUnitsByDayChart();
             }
 
             // Update units chart
@@ -1204,6 +1217,87 @@
                         }
                     }
                 });
+            }
+
+            // Update average units by day chart
+            updateAvgUnitsByDayChart() {
+                const ctx = document.getElementById('avgUnitsByDayChart');
+                if (!ctx) return;
+                const chartData = this.getAverageUnitsByDayChartData();
+
+                if (this.avgUnitsByDayChart) {
+                    this.avgUnitsByDayChart.destroy();
+                }
+
+                this.avgUnitsByDayChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: chartData.labels,
+                        datasets: [{
+                            label: 'Avg Units/Day',
+                            data: chartData.values,
+                            borderColor: '#14b8a6',
+                            backgroundColor: 'rgba(20, 184, 166, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.4,
+                            pointBackgroundColor: '#14b8a6',
+                            pointBorderColor: '#14b8a6',
+                            pointRadius: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                grid: {
+                                    color: 'rgba(0, 0, 0, 0.1)'
+                                },
+                                title: {
+                                    display: true,
+                                    text: 'Units'
+                                }
+                            },
+                            x: {
+                                grid: {
+                                    color: 'rgba(0, 0, 0, 0.1)'
+                                },
+                                title: {
+                                    display: true,
+                                    text: 'Day of Month'
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Get average units by day chart data
+            getAverageUnitsByDayChartData() {
+                const dailyUnits = {};
+                this.data.units.forEach(unit => {
+                    const date = new Date(unit.timestamp);
+                    const day = date.getDate();
+                    dailyUnits[day] = (dailyUnits[day] || 0) + unit.count;
+                });
+
+                const today = new Date().getDate();
+                const labels = [];
+                const values = [];
+
+                for (let day = 1; day <= today; day++) {
+                    labels.push(day.toString());
+                    values.push(dailyUnits[day] || 0);
+                }
+
+                return { labels, values };
             }
 
             // Initialize hourly chart
