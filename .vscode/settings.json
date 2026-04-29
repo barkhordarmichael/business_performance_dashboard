@@ -4,6 +4,10 @@
         "/^git add \\.$/": {
             "approve": true,
             "matchCommandLine": true
+        },
+        "/^git commit -m \"Add favicon and comprehensive README documentation\n\n- Add SVG favicon with bar chart icon representing dashboard functionality\n- Create detailed README\\.md with project overview, features, and setup instructions\n- Update index\\.html to include favicon link\"$/": {
+            "approve": true,
+            "matchCommandLine": true
         }
     }
 }
