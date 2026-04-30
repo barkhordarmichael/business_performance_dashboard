@@ -1230,20 +1230,16 @@
                 }
 
                 this.avgUnitsByDayChart = new Chart(ctx, {
-                    type: 'line',
+                    type: 'bar',
                     data: {
                         labels: chartData.labels,
                         datasets: [{
-                            label: 'Avg Units/Day',
+                            label: 'Avg Units per Weekday',
                             data: chartData.values,
+                            backgroundColor: 'rgba(20, 184, 166, 0.8)',
                             borderColor: '#14b8a6',
-                            backgroundColor: 'rgba(20, 184, 166, 0.1)',
-                            borderWidth: 2,
-                            fill: true,
-                            tension: 0.4,
-                            pointBackgroundColor: '#14b8a6',
-                            pointBorderColor: '#14b8a6',
-                            pointRadius: 4
+                            borderWidth: 1,
+                            hoverBackgroundColor: 'rgba(20, 184, 166, 1)'
                         }]
                     },
                     options: {
@@ -1271,7 +1267,7 @@
                                 },
                                 title: {
                                     display: true,
-                                    text: 'Day of Month'
+                                    text: 'Day of Week'
                                 }
                             }
                         }
@@ -1281,23 +1277,49 @@
 
             // Get average units by day chart data
             getAverageUnitsByDayChartData() {
-                const dailyUnits = {};
-                this.data.units.forEach(unit => {
-                    const date = new Date(unit.timestamp);
-                    const day = date.getDate();
-                    dailyUnits[day] = (dailyUnits[day] || 0) + unit.count;
-                });
+                const weekdayLabels = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+                const weekdayUnits = {
+                    0: 0,
+                    1: 0,
+                    2: 0,
+                    3: 0,
+                    4: 0,
+                    5: 0,
+                    6: 0
+                };
+                const weekdayOccurrences = {
+                    0: 0,
+                    1: 0,
+                    2: 0,
+                    3: 0,
+                    4: 0,
+                    5: 0,
+                    6: 0
+                };
 
-                const today = new Date().getDate();
-                const labels = [];
-                const values = [];
+                const year = this.currentYear;
+                const month = this.currentMonth;
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-                for (let day = 1; day <= today; day++) {
-                    labels.push(day.toString());
-                    values.push(dailyUnits[day] || 0);
+                for (let day = 1; day <= daysInMonth; day++) {
+                    const weekday = new Date(year, month, day).getDay();
+                    weekdayOccurrences[weekday] += 1;
                 }
 
-                return { labels, values };
+                this.data.units.forEach(unit => {
+                    const date = new Date(unit.timestamp);
+                    if (date.getFullYear() === year && date.getMonth() === month) {
+                        weekdayUnits[date.getDay()] += unit.count;
+                    }
+                });
+
+                const values = weekdayLabels.map((_, index) => {
+                    const weekday = (index + 1) % 7; // Monday first, Sunday last
+                    const occurrences = weekdayOccurrences[weekday] || 0;
+                    return occurrences > 0 ? weekdayUnits[weekday] / occurrences : 0;
+                });
+
+                return { labels: weekdayLabels, values };
             }
 
             // Initialize hourly chart
