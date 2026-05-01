@@ -655,8 +655,10 @@
                 const inputValue = this.elements.revenueInput.value.trim();
                 let amount = 0;
                 if(inputValue > 999){
-                    alert('Amount exceeds maximum limit of £999');
-                    return;
+                    const confirmed = confirm('The amount exceeds £999. Are you sure you want to enter this value?');
+                    if (!confirmed) {
+                        return;
+                    }
                 }
                 // If input is empty, treat as £0 revenue
                 if (inputValue === '') {
