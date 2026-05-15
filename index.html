@@ -425,7 +425,7 @@
                     </svg>
                     View History
                 </button>
-                <button id="generateReportBtn" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg flex items-center">
+                <button id="generateReportBtn" type="button" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg flex items-center">
                     <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                     </svg>
@@ -462,40 +462,159 @@
 
     <script>
 
+        const DB_NAME = 'BusinessDashboardDB';
+        const DB_VERSION = 1;
+        const STORE_NAME = 'dashboardData';
+        const SETTINGS_STORE = 'dashboardSettings';
+
+        function openDashboardDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+                request.onupgradeneeded = (event) => {
+                    const db = event.target.result;
+                    if (!db.objectStoreNames.contains(STORE_NAME)) {
+                        db.createObjectStore(STORE_NAME, { keyPath: 'monthKey' });
+                    }
+                    if (!db.objectStoreNames.contains(SETTINGS_STORE)) {
+                        db.createObjectStore(SETTINGS_STORE, { keyPath: 'key' });
+                    }
+                };
+
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+        }
+
+        function getObjectStore(db, mode = 'readonly', storeName = STORE_NAME) {
+            return db.transaction(storeName, mode).objectStore(storeName);
+        }
+
+        function getMonthDataFromDB(db, monthKey) {
+            return new Promise((resolve, reject) => {
+                const store = getObjectStore(db, 'readonly', STORE_NAME);
+                const request = store.get(monthKey);
+
+                request.onsuccess = () => resolve(request.result ? request.result.data : null);
+                request.onerror = () => reject(request.error);
+            });
+        }
+
+        function saveMonthDataToDB(db, monthKey, data) {
+            return new Promise((resolve, reject) => {
+                const store = getObjectStore(db, 'readwrite', STORE_NAME);
+                const request = store.put({ monthKey, data });
+
+                request.onsuccess = () => resolve();
+                request.onerror = () => reject(request.error);
+            });
+        }
+
+        function deleteMonthDataFromDB(db, monthKey) {
+            return new Promise((resolve, reject) => {
+                const store = getObjectStore(db, 'readwrite', STORE_NAME);
+                const request = store.delete(monthKey);
+
+                request.onsuccess = () => resolve();
+                request.onerror = () => reject(request.error);
+            });
+        }
+
+        function getSettingFromDB(db, key) {
+            return new Promise((resolve, reject) => {
+                const store = getObjectStore(db, 'readonly', SETTINGS_STORE);
+                const request = store.get(key);
+
+                request.onsuccess = () => resolve(request.result ? request.result.value : null);
+                request.onerror = () => reject(request.error);
+            });
+        }
+
+        function saveSettingToDB(db, key, value) {
+            return new Promise((resolve, reject) => {
+                const store = getObjectStore(db, 'readwrite', SETTINGS_STORE);
+                const request = store.put({ key, value });
+
+                request.onsuccess = () => resolve();
+                request.onerror = () => reject(request.error);
+            });
+        }
+
+        function deleteSettingFromDB(db, key) {
+            return new Promise((resolve, reject) => {
+                const store = getObjectStore(db, 'readwrite', SETTINGS_STORE);
+                const request = store.delete(key);
+
+                request.onsuccess = () => resolve();
+                request.onerror = () => reject(request.error);
+            });
+        }
+
+        function getAllMonthsDataFromDB(db) {
+            return new Promise((resolve, reject) => {
+                const store = getObjectStore(db, 'readonly', STORE_NAME);
+                const request = store.openCursor();
+                const allData = {};
+
+                request.onsuccess = (event) => {
+                    const cursor = event.target.result;
+                    if (!cursor) {
+                        resolve(allData);
+                        return;
+                    }
+                    allData[cursor.key] = cursor.value.data;
+                    cursor.continue();
+                };
+
+                request.onerror = () => reject(request.error);
+            });
+        }
+
         // Persist and restore gauge target inputs and user overrides
-            function saveInputStats() {
-                const unitTargetInput = document.getElementById('month-unit-target');
-                const conversionTargetInput = document.getElementById('conversion-target-input');
-                const monthlyUnitsInput = document.getElementById('monthly-units-input');
-                const conversionRateInput = document.getElementById('conversion-rate-input');
-                if (!unitTargetInput || !conversionTargetInput || !monthlyUnitsInput || !conversionRateInput) return;
+            async function saveInputStats() {
+                try {
+                    const unitTargetInput = document.getElementById('month-unit-target');
+                    const conversionTargetInput = document.getElementById('conversion-target-input');
+                    const monthlyUnitsInput = document.getElementById('monthly-units-input');
+                    const conversionRateInput = document.getElementById('conversion-rate-input');
+                    if (!unitTargetInput || !conversionTargetInput || !monthlyUnitsInput || !conversionRateInput) return;
 
-                const monthUnitTarget = parseFloat(unitTargetInput.value);
-                const monthConversionTarget = parseFloat(conversionTargetInput.value);
-                const monthlyUnitsOverride = parseInt(monthlyUnitsInput.value, 10);
-                const conversionRateOverride = parseFloat(conversionRateInput.value);
-                const dashboard = window.dashboardInstance;
-                const actualUnits = dashboard ? dashboard.getTotalUnits() : 0;
-                const actualConversion = dashboard ? dashboard.getCurrentConversion() : 0;
+                    const monthUnitTarget = parseFloat(unitTargetInput.value);
+                    const monthConversionTarget = parseFloat(conversionTargetInput.value);
+                    const monthlyUnitsOverride = parseInt(monthlyUnitsInput.value, 10);
+                    const conversionRateOverride = parseFloat(conversionRateInput.value);
+                    const dashboard = window.dashboardInstance;
+                    const actualUnits = dashboard ? dashboard.getTotalUnits() : 0;
+                    const actualConversion = dashboard ? dashboard.getCurrentConversion() : 0;
+                    const db = dashboard ? dashboard.db : null;
 
-                if (!isNaN(monthUnitTarget) && monthUnitTarget > 0) {
-                    localStorage.setItem('monthUnitTarget', monthUnitTarget);
-                }
+                    if (db) {
+                        if (!isNaN(monthUnitTarget) && monthUnitTarget > 0) {
+                            await saveSettingToDB(db, 'monthUnitTarget', monthUnitTarget);
+                        }
 
-                if (!isNaN(monthConversionTarget) && monthConversionTarget > 0) {
-                    localStorage.setItem('monthConversionTarget', monthConversionTarget);
-                }
+                        if (!isNaN(monthConversionTarget) && monthConversionTarget > 0) {
+                            await saveSettingToDB(db, 'monthConversionTarget', monthConversionTarget);
+                        }
 
-                if (!isNaN(monthlyUnitsOverride) && monthlyUnitsOverride >= 0) {
-                    localStorage.setItem('monthlyUnitsOffset', monthlyUnitsOverride - actualUnits);
-                } else {
-                    localStorage.removeItem('monthlyUnitsOffset');
-                }
+                        if (!isNaN(monthlyUnitsOverride) && monthlyUnitsOverride >= 0) {
+                            dashboard.monthlyUnitsOffset = monthlyUnitsOverride - actualUnits;
+                            await saveSettingToDB(db, 'monthlyUnitsOffset', dashboard.monthlyUnitsOffset);
+                        } else {
+                            dashboard.monthlyUnitsOffset = NaN;
+                            await deleteSettingFromDB(db, 'monthlyUnitsOffset');
+                        }
 
-                if (!isNaN(conversionRateOverride) && conversionRateOverride >= 0) {
-                    localStorage.setItem('monthlyConversionOffset', conversionRateOverride - actualConversion);
-                } else {
-                    localStorage.removeItem('monthlyConversionOffset');
+                        if (!isNaN(conversionRateOverride) && conversionRateOverride >= 0) {
+                            dashboard.monthlyConversionOffset = conversionRateOverride - actualConversion;
+                            await saveSettingToDB(db, 'monthlyConversionOffset', dashboard.monthlyConversionOffset);
+                        } else {
+                            dashboard.monthlyConversionOffset = NaN;
+                            await deleteSettingFromDB(db, 'monthlyConversionOffset');
+                        }
+                    }
+                } catch (error) {
+                    console.error('Failed to save gauge settings to IndexedDB:', error);
                 }
             }
                 
@@ -506,15 +625,26 @@
                 this.currentMonth = new Date().getMonth();
                 this.currentYear = new Date().getFullYear();
                 this.monthKey = `${this.currentYear}-${this.currentMonth}`;
-                
-                // Initialize data structure
-                this.data = this.loadMonthData();
-                
-                // Initialize UI elements
+                this.db = null;
+                this.monthlyUnitsOffset = NaN;
+                this.monthlyConversionOffset = NaN;
+                this.data = {
+                    revenue: [],
+                    units: [],
+                    negativeDispositions: [],
+                    conversions: [],
+                    totalInteractions: 0
+                };
+            }
+
+            async init() {
+                this.db = await openDashboardDB();
+                this.data = await this.loadMonthData();
+
                 this.initializeElements();
                 this.bindEvents();
                 this.updateDisplay();
-                this.initializeGauges();
+                await this.initializeGauges();
                 this.initializeCharts();
                 this.initializeHourlyChart();
             }
@@ -560,30 +690,44 @@
                 };
             }
             
-            // Load data for current month from localStorage
-            loadMonthData() {
-                const savedData = localStorage.getItem(`dashboard_${this.monthKey}`);
+            // Load data for current month from IndexedDB (or migrate from localStorage if present)
+            async loadMonthData() {
+                let savedData = null;
+                try {
+                    savedData = await getMonthDataFromDB(this.db, this.monthKey);
+                } catch (error) {
+                    console.warn('Failed to load month data from IndexedDB:', error);
+                }
+
                 if (savedData) {
-                    const data = JSON.parse(savedData);
-                    
+                    return savedData;
+                }
+
+                const localKey = `dashboard_${this.monthKey}`;
+                const legacyData = localStorage.getItem(localKey);
+                if (legacyData) {
+                    const data = JSON.parse(legacyData);
+
                     // Migrate old data format where negativeDispositions was a number
                     if (typeof data.negativeDispositions === 'number') {
                         const count = data.negativeDispositions;
                         data.negativeDispositions = [];
-                        // Create array entries for existing count
                         for (let i = 0; i < count; i++) {
                             data.negativeDispositions.push({
                                 timestamp: new Date().toISOString()
                             });
                         }
-                        // Save migrated data immediately
-                        localStorage.setItem(`dashboard_${this.monthKey}`, JSON.stringify(data));
                     }
-                    
+
+                    try {
+                        await saveMonthDataToDB(this.db, this.monthKey, data);
+                    } catch (error) {
+                        console.warn('Failed to migrate legacy month data into IndexedDB:', error);
+                    }
+
                     return data;
                 }
-                
-                // Return default data structure
+
                 return {
                     revenue: [],
                     units: [],
@@ -593,25 +737,32 @@
                 };
             }
 
-            // Save data to localStorage
-            saveData() {
-                localStorage.setItem(`dashboard_${this.monthKey}`, JSON.stringify(this.data));
+            // Save data to IndexedDB
+            async saveData() {
+                try {
+                    await saveMonthDataToDB(this.db, this.monthKey, this.data);
+                } catch (error) {
+                    console.error('Failed to save dashboard data to IndexedDB:', error);
+                }
             }
 
             // Bind event listeners
             bindEvents() {
-                this.elements.addRevenueBtn.addEventListener('click', () => this.addRevenue());
-                this.elements.revenueInput.addEventListener('keypress', (e) => {
-                    if (e.key === 'Enter') this.addRevenue();
+                this.elements.addRevenueBtn.addEventListener('click', async () => await this.addRevenue());
+                this.elements.revenueInput.addEventListener('keypress', async (e) => {
+                    if (e.key === 'Enter') await this.addRevenue();
                 });
 
-                this.elements.negativeBtn.addEventListener('click', () => this.addNegativeDisposition());
-                this.elements.resetDataBtn.addEventListener('click', () => this.resetMonthData());
-                this.elements.resetDailyBtn.addEventListener('click', () => this.resetDailyData());
-                this.elements.exportDataBtn.addEventListener('click', () => this.exportData());
-                this.elements.importFileInput.addEventListener('change', (e) => this.importData(e));
+                this.elements.negativeBtn.addEventListener('click', async () => await this.addNegativeDisposition());
+                this.elements.resetDataBtn.addEventListener('click', async () => await this.resetMonthData());
+                this.elements.resetDailyBtn.addEventListener('click', async () => await this.resetDailyData());
+                this.elements.exportDataBtn.addEventListener('click', async () => await this.exportData());
+                this.elements.importFileInput.addEventListener('change', async (e) => await this.importData(e));
                 this.elements.viewHistoryBtn.addEventListener('click', () => this.showHistory());
-                this.elements.generateReportBtn.addEventListener('click', () => this.generateReport());
+                this.elements.generateReportBtn.addEventListener('click', async (event) => {
+                    event.preventDefault();
+                    await this.generateReport();
+                });
 
                 // History modal events
                 document.getElementById('closeHistoryModal').addEventListener('click', () => this.hideHistory());
@@ -624,26 +775,26 @@
                 const conversionRateInput = document.getElementById('conversion-rate-input');
                 if (unitTargetInput) {
                     unitTargetInput.addEventListener('input', () => {
-                        saveInputStats();
+                        saveInputStats().catch((error) => console.error(error));
                         this.updateGauges();
                     });
                 }
                 if (conversionTargetInput) {
                     conversionTargetInput.addEventListener('input', () => {
-                        saveInputStats();
+                        saveInputStats().catch((error) => console.error(error));
                         this.updateGauges();
                     });
                 }
                 if (monthlyUnitsInput) {
                     monthlyUnitsInput.addEventListener('input', () => {
-                        saveInputStats();
+                        saveInputStats().catch((error) => console.error(error));
                         this.updateDisplay();
                         this.updateGauges();
                     });
                 }
                 if (conversionRateInput) {
                     conversionRateInput.addEventListener('input', () => {
-                        saveInputStats();
+                        saveInputStats().catch((error) => console.error(error));
                         this.updateDisplay();
                         this.updateGauges();
                     });
@@ -651,7 +802,7 @@
             }
 
             // Add revenue
-            addRevenue() {
+            async addRevenue() {
                 const inputValue = this.elements.revenueInput.value.trim();
                 let amount = 0;
                 if(inputValue > 999){
@@ -685,7 +836,7 @@
                 this.data.totalInteractions++;
                 this.calculateConversion();
                 this.elements.revenueInput.value = '';
-                this.saveData();
+                await this.saveData();
                 this.updateDisplay();
                 this.updateGauges();
                 this.updateCharts();
@@ -693,13 +844,13 @@
             }
 
             // Add negative disposition
-            addNegativeDisposition() {
+            async addNegativeDisposition() {
                 this.data.negativeDispositions.push({
                     timestamp: new Date().toISOString()
                 });
                 this.data.totalInteractions++;
                 this.calculateConversion();
-                this.saveData();
+                await this.saveData();
                 this.updateDisplay();
                 this.updateGauges();
                 this.updateCharts();
@@ -737,34 +888,22 @@
 
             // Get user display units override if provided
             getDisplayUnits() {
-                const offsetValue = localStorage.getItem('monthlyUnitsOffset');
-                const absoluteOverride = localStorage.getItem('monthlyUnitsOverride');
-                const offset = offsetValue !== null ? parseFloat(offsetValue) : NaN;
-                const absolute = absoluteOverride !== null ? parseInt(absoluteOverride, 10) : NaN;
+                const offset = !isNaN(this.monthlyUnitsOffset) ? this.monthlyUnitsOffset : NaN;
                 const base = this.getTotalUnits();
 
                 if (!isNaN(offset)) {
                     return Math.max(0, base + offset);
-                }
-                if (!isNaN(absolute) && absolute >= 0) {
-                    return absolute;
                 }
                 return base;
             }
 
             // Get user display conversion override if provided
             getDisplayConversion() {
-                const offsetValue = localStorage.getItem('monthlyConversionOffset');
-                const absoluteOverride = localStorage.getItem('monthlyConversionOverride');
-                const offset = offsetValue !== null ? parseFloat(offsetValue) : NaN;
-                const absolute = absoluteOverride !== null ? parseFloat(absoluteOverride) : NaN;
+                const offset = !isNaN(this.monthlyConversionOffset) ? this.monthlyConversionOffset : NaN;
                 const base = this.getCurrentConversion();
 
                 if (!isNaN(offset)) {
                     return Math.max(0, base + offset);
-                }
-                if (!isNaN(absolute) && absolute >= 0) {
-                    return absolute;
                 }
                 return base;
             }
@@ -973,16 +1112,74 @@
             }
 
             // Initialize performance gauges
-            initializeGauges() {
+            async initializeGauges() {
                 const unitTargetInput = document.getElementById('month-unit-target');
                 const conversionTargetInput = document.getElementById('conversion-target-input');
                 const monthlyUnitsInput = document.getElementById('monthly-units-input');
                 const conversionRateInput = document.getElementById('conversion-rate-input');
 
-                const savedUnitTarget = localStorage.getItem('monthUnitTarget');
-                const savedConversionTarget = localStorage.getItem('monthConversionTarget');
-                const savedUnitsOffset = parseFloat(localStorage.getItem('monthlyUnitsOffset'));
-                const savedConversionOffset = parseFloat(localStorage.getItem('monthlyConversionOffset'));
+                let savedUnitTarget = null;
+                let savedConversionTarget = null;
+                let savedUnitsOffset = NaN;
+                let savedConversionOffset = NaN;
+
+                if (this.db) {
+                    try {
+                        savedUnitTarget = await getSettingFromDB(this.db, 'monthUnitTarget');
+                        savedConversionTarget = await getSettingFromDB(this.db, 'monthConversionTarget');
+                        savedUnitsOffset = parseFloat(await getSettingFromDB(this.db, 'monthlyUnitsOffset'));
+                        savedConversionOffset = parseFloat(await getSettingFromDB(this.db, 'monthlyConversionOffset'));
+                    } catch (error) {
+                        console.warn('Failed to load gauge settings from IndexedDB:', error);
+                    }
+                }
+
+                if (savedUnitTarget === null) {
+                    const legacyUnitTarget = localStorage.getItem('monthUnitTarget');
+                    if (legacyUnitTarget !== null) {
+                        savedUnitTarget = parseFloat(legacyUnitTarget);
+                        if (this.db) {
+                            await saveSettingToDB(this.db, 'monthUnitTarget', savedUnitTarget);
+                            localStorage.removeItem('monthUnitTarget');
+                        }
+                    }
+                }
+
+                if (savedConversionTarget === null) {
+                    const legacyConversionTarget = localStorage.getItem('monthConversionTarget');
+                    if (legacyConversionTarget !== null) {
+                        savedConversionTarget = parseFloat(legacyConversionTarget);
+                        if (this.db) {
+                            await saveSettingToDB(this.db, 'monthConversionTarget', savedConversionTarget);
+                            localStorage.removeItem('monthConversionTarget');
+                        }
+                    }
+                }
+
+                if (isNaN(savedUnitsOffset)) {
+                    const legacyUnitsOffset = localStorage.getItem('monthlyUnitsOffset');
+                    if (legacyUnitsOffset !== null) {
+                        savedUnitsOffset = parseFloat(legacyUnitsOffset);
+                        if (this.db) {
+                            await saveSettingToDB(this.db, 'monthlyUnitsOffset', savedUnitsOffset);
+                            localStorage.removeItem('monthlyUnitsOffset');
+                        }
+                    }
+                }
+
+                if (isNaN(savedConversionOffset)) {
+                    const legacyConversionOffset = localStorage.getItem('monthlyConversionOffset');
+                    if (legacyConversionOffset !== null) {
+                        savedConversionOffset = parseFloat(legacyConversionOffset);
+                        if (this.db) {
+                            await saveSettingToDB(this.db, 'monthlyConversionOffset', savedConversionOffset);
+                            localStorage.removeItem('monthlyConversionOffset');
+                        }
+                    }
+                }
+
+                this.monthlyUnitsOffset = savedUnitsOffset;
+                this.monthlyConversionOffset = savedConversionOffset;
 
                 if (unitTargetInput) {
                     unitTargetInput.value = savedUnitTarget && parseFloat(savedUnitTarget) > 0 ? savedUnitTarget : '100';
@@ -1007,7 +1204,11 @@
                 const displayConversion = this.getDisplayConversion();
                 const monthUnitTargetInput = document.getElementById('month-unit-target');
                 const monthUnitTarget = parseFloat(monthUnitTargetInput ? monthUnitTargetInput.value : '100') || 100;
-                localStorage.setItem('monthUnitTarget', monthUnitTarget);
+                if (this.db) {
+                    saveSettingToDB(this.db, 'monthUnitTarget', monthUnitTarget).catch((error) => {
+                        console.error('Failed to save unit target to IndexedDB:', error);
+                    });
+                }
 
                 // Units gauge
                 const unitPercentage = Math.min((displayUnits / monthUnitTarget) * 100, 100);
@@ -1017,7 +1218,11 @@
                 // Conversion gauge
                 const monthConversionTargetInput = document.getElementById('conversion-target-input');
                 const monthConversionTarget = parseFloat(monthConversionTargetInput ? monthConversionTargetInput.value : '80') || 80;
-                localStorage.setItem('monthConversionTarget', monthConversionTarget);
+                if (this.db) {
+                    saveSettingToDB(this.db, 'monthConversionTarget', monthConversionTarget).catch((error) => {
+                        console.error('Failed to save conversion target to IndexedDB:', error);
+                    });
+                }
                 const conversionPercentage = Math.min((displayConversion / monthConversionTarget) * 100, 100);
                 this.updateGauge('conversionGaugeFill', conversionPercentage);
                 this.elements.conversionGaugeValue.textContent = `${displayConversion.toFixed(1)}%`;
@@ -1508,7 +1713,7 @@
             }
 
             // Reset month data
-            resetMonthData() {
+            async resetMonthData() {
                 if (confirm('Are you sure you want to clear all data for this month?')) {
                     this.data = {
                         revenue: [],
@@ -1517,7 +1722,7 @@
                         conversions: [],
                         totalInteractions: 0
                     };
-                    this.saveData();
+                    await this.saveData();
                     this.updateDisplay();
                     this.updateGauges();
                     this.updateCharts();
@@ -1526,7 +1731,7 @@
             }
 
             // Reset daily data
-            resetDailyData() {
+            async resetDailyData() {
                 if (confirm('Are you sure you want to reset today\'s data?')) {
                     const today = new Date().toDateString();
                     
@@ -1547,7 +1752,7 @@
                     // Recalculate interactions
                     this.data.totalInteractions = this.data.units.length + this.data.negativeDispositions.length;
 
-                    this.saveData();
+                    await this.saveData();
                     this.updateDisplay();
                     this.updateGauges();
                     this.updateCharts();
@@ -1556,20 +1761,20 @@
             }
 
             // Export data
-            exportData() {
+            async exportData() {
                 const exportData = {
                     exportDate: new Date().toISOString(),
                     version: "1.0",
                     dashboardData: {}
                 };
 
-                // Export all months
-                for (let i = 0; i < localStorage.length; i++) {
-                    const key = localStorage.key(i);
-                    if (key && key.startsWith('dashboard_')) {
-                        const monthKey = key.replace('dashboard_', '');
-                        exportData.dashboardData[monthKey] = JSON.parse(localStorage.getItem(key));
-                    }
+                try {
+                    const allData = await getAllMonthsDataFromDB(this.db);
+                    Object.entries(allData).forEach(([monthKey, data]) => {
+                        exportData.dashboardData[monthKey] = data;
+                    });
+                } catch (error) {
+                    console.error('Failed to load data for export from IndexedDB:', error);
                 }
 
                 const dataStr = JSON.stringify(exportData, null, 2);
@@ -1585,12 +1790,12 @@
             }
 
             // Import data
-            importData(event) {
+            async importData(event) {
                 const file = event.target.files[0];
                 if (!file) return;
 
                 const reader = new FileReader();
-                reader.onload = (e) => {
+                reader.onload = async (e) => {
                     try {
                         const importedData = JSON.parse(e.target.result);
                         
@@ -1604,13 +1809,16 @@
                             return;
                         }
 
-                        // Import all months
-                        Object.entries(importedData.dashboardData).forEach(([monthKey, data]) => {
-                            localStorage.setItem(`dashboard_${monthKey}`, JSON.stringify(data));
-                        });
+                        for (const [monthKey, data] of Object.entries(importedData.dashboardData)) {
+                            try {
+                                await saveMonthDataToDB(this.db, monthKey, data);
+                            } catch (error) {
+                                console.warn(`Failed to import month ${monthKey}:`, error);
+                            }
+                        }
 
                         // Reload current month data
-                        this.data = this.loadMonthData();
+                        this.data = await this.loadMonthData();
                         this.updateDisplay();
                         this.updateGauges();
                         this.updateCharts();
@@ -1629,21 +1837,19 @@
             }
 
             // Show history modal
-            showHistory() {
+            async showHistory() {
                 const modal = document.getElementById('historyModal');
                 const select = document.getElementById('historyMonthSelect');
                 
                 // Clear previous options
                 select.innerHTML = '<option value="">Select a month</option>';
                 
-                // Get all available months from localStorage
                 const availableMonths = [];
-                for (let i = 0; i < localStorage.length; i++) {
-                    const key = localStorage.key(i);
-                    if (key && key.startsWith('dashboard_')) {
-                        const monthKey = key.replace('dashboard_', '');
-                        availableMonths.push(monthKey);
-                    }
+                try {
+                    const allData = await getAllMonthsDataFromDB(this.db);
+                    availableMonths.push(...Object.keys(allData));
+                } catch (error) {
+                    console.error('Failed to load history months from IndexedDB:', error);
                 }
                 
                 // Sort months
@@ -1672,7 +1878,7 @@
             }
 
             // Load history for selected month
-            loadHistoryForMonth(monthKey) {
+            async loadHistoryForMonth(monthKey) {
                 const content = document.getElementById('historyContent');
                 
                 if (!monthKey) {
@@ -1680,13 +1886,18 @@
                     return;
                 }
                 
-                const data = localStorage.getItem(`dashboard_${monthKey}`);
-                if (!data) {
+                let monthData = null;
+                try {
+                    monthData = await getMonthDataFromDB(this.db, monthKey);
+                } catch (error) {
+                    console.error('Failed to load history month from IndexedDB:', error);
+                }
+
+                if (!monthData) {
                     content.innerHTML = '<p class="text-gray-500 text-center">No data found for selected month</p>';
                     return;
                 }
                 
-                const monthData = JSON.parse(data);
                 const [year, month] = monthKey.split('-');
                 const monthNames = [
                     'January', 'February', 'March', 'April', 'May', 'June',
@@ -1762,20 +1973,18 @@
             }
 
             // Generate comprehensive HTML report popup
-            generateReport() {
+            async generateReport() {
                 const monthNames = [
                     'January', 'February', 'March', 'April', 'May', 'June',
                     'July', 'August', 'September', 'October', 'November', 'December'
                 ];
                 
                 // Get all historical data
-                const allMonthsData = {};
-                for (let i = 0; i < localStorage.length; i++) {
-                    const key = localStorage.key(i);
-                    if (key && key.startsWith('dashboard_')) {
-                        const monthKey = key.replace('dashboard_', '');
-                        allMonthsData[monthKey] = JSON.parse(localStorage.getItem(key));
-                    }
+                let allMonthsData = {};
+                try {
+                    allMonthsData = await getAllMonthsDataFromDB(this.db);
+                } catch (error) {
+                    console.error('Failed to load historical report data from IndexedDB:', error);
                 }
                 
                 // Calculate current month stats
@@ -1902,8 +2111,9 @@
         }
 
         // Initialize dashboard when page loads
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
             window.dashboardInstance = new BusinessDashboard();
+            await window.dashboardInstance.init();
         });
     </script>
 </body>
